@@ -1,0 +1,36 @@
+databases:
+  - name: crewio-db
+    databaseName: restaurant_shifts
+    user: crewio
+    plan: free
+    region: frankfurt
+
+services:
+  - type: web
+    name: crewio-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    rootDir: restaurant-shifts-backend
+    buildCommand: npm install && npm run build
+    startCommand: node dist/main
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: crewio-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: PORT
+        value: 10000

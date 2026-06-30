@@ -1,0 +1,8 @@
+version: "3"
+tunnels:
+  crewio-api:
+    addr: 3000
+    proto: http
+  crewio-web:
+    addr: 5173
+    proto: http
