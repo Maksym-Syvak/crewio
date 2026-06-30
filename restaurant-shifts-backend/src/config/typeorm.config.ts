@@ -4,10 +4,14 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 export const typeOrmConfig = (config: ConfigService): TypeOrmModuleOptions => {
   const isProd = config.get<string>('NODE_ENV') === 'production';
   const databaseUrl = config.get<string>('DATABASE_URL');
+  // MVP: no migrations yet — set DB_SYNCHRONIZE=true on Render to create schema.
+  // Turn off once you switch to migrations and have real data.
+  const synchronize =
+    config.get<string>('DB_SYNCHRONIZE') === 'true' || !isProd;
 
   const common: Partial<TypeOrmModuleOptions> = {
     autoLoadEntities: true,
-    synchronize: !isProd,
+    synchronize,
     logging: !isProd,
   };
 
