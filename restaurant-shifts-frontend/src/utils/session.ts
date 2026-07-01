@@ -1,8 +1,9 @@
 import { useAuthStore } from '@/store';
+import { useOnboardingStore } from '@/store/onboarding';
 import { authApi } from '@/api/auth.api';
 import { disconnectSocket } from '@/sockets/events';
 
-/** Clears client session only — user data on server is preserved. */
+/** Clears all client session state — JWT, zustand, localStorage, sessionStorage. */
 export async function clearAppSession() {
   disconnectSocket();
 
@@ -13,6 +14,14 @@ export async function clearAppSession() {
   }
 
   useAuthStore.getState().logout();
+  useOnboardingStore.getState().reset();
 
   await useAuthStore.persist.clearStorage();
+  await useOnboardingStore.persist.clearStorage();
+
+  sessionStorage.clear();
+}
+
+export function getTelegramInitData(): string | null {
+  return window.Telegram?.WebApp?.initData || null;
 }

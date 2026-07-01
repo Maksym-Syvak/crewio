@@ -115,6 +115,16 @@ export default function ProfilePage() {
         <button type="button" className="btn-danger" onClick={() => setLogoutOpen(true)}>
           Вийти
         </button>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={async () => {
+            await clearAppSession();
+            navigate('/login', { replace: true });
+          }}
+        >
+          Увійти під іншим акаунтом
+        </button>
       </div>
 
       <button

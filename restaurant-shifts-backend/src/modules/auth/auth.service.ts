@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -87,27 +89,97 @@ export class AuthService {
     };
   }
 
+  async checkUser(initData: string) {
+    const telegramUser = this.verifyInitData(initData);
+    return this.usersService.getTelegramUserStatus(String(telegramUser.id));
+  }
+
   async loginWithInitData(initData: string) {
     const telegramUser = this.verifyInitData(initData);
+    const telegramId = String(telegramUser.id);
 
-    let user = await this.usersService.findByTelegramId(String(telegramUser.id));
-    if (!user) {
-      user = await this.usersService.create({
-        telegram_id: String(telegramUser.id),
-        username: telegramUser.username,
-        first_name: telegramUser.first_name,
-        last_name: telegramUser.last_name,
-        photo_url: telegramUser.photo_url,
-        role: UserRole.EMPLOYEE,
-        is_profile_completed: false,
-      });
-    } else {
-      await this.usersService.update(user.id, {
-        username: telegramUser.username ?? user.username,
-        photo_url: telegramUser.photo_url ?? user.photo_url,
-      });
-      user = (await this.usersService.findById(user.id))!;
+    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    if (!anyUser) {
+      throw new NotFoundException('Акаунт не знайдено. Створіть новий профіль.');
     }
+    if (anyUser.is_deleted) {
+      throw new UnauthorizedException('Акаунт видалено. Відновіть або створіть новий профіль.');
+    }
+
+    await this.usersService.update(anyUser.id, {
+      username: telegramUser.username ?? anyUser.username,
+      photo_url: telegramUser.photo_url ?? anyUser.photo_url,
+    });
+    const user = (await this.usersService.findById(anyUser.id))!;
+
+    return this.buildAuthResponse(user);
+  }
+
+  async registerWithInitData(initData: string) {
+    const telegramUser = this.verifyInitData(initData);
+    const telegramId = String(telegramUser.id);
+
+    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    if (anyUser && !anyUser.is_deleted) {
+      throw new ConflictException('Акаунт вже існує. Увійдіть у наявний профіль.');
+    }
+    if (anyUser?.is_deleted) {
+      throw new ConflictException('Виявлено раніше видалений профіль');
+    }
+
+    const user = await this.usersService.create({
+      telegram_id: telegramId,
+      username: telegramUser.username,
+      first_name: telegramUser.first_name,
+      last_name: telegramUser.last_name,
+      photo_url: telegramUser.photo_url,
+      role: UserRole.EMPLOYEE,
+      is_profile_completed: false,
+    });
+
+    return this.buildAuthResponse(user);
+  }
+
+  async restoreAccount(initData: string) {
+    const telegramUser = this.verifyInitData(initData);
+    const telegramId = String(telegramUser.id);
+
+    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    if (!anyUser?.is_deleted) {
+      throw new BadRequestException('Немає видаленого профілю для відновлення');
+    }
+
+    await this.usersService.restoreUser(anyUser.id, {
+      username: telegramUser.username ?? anyUser.username,
+      photo_url: telegramUser.photo_url ?? anyUser.photo_url,
+    });
+    const user = (await this.usersService.findById(anyUser.id))!;
+
+    return this.buildAuthResponse(user);
+  }
+
+  async recreateAccount(initData: string) {
+    const telegramUser = this.verifyInitData(initData);
+    const telegramId = String(telegramUser.id);
+
+    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    if (anyUser && !anyUser.is_deleted) {
+      throw new ConflictException('Акаунт вже існує. Увійдіть у наявний профіль.');
+    }
+
+    if (anyUser?.is_deleted) {
+      await this.usersService.hardDeleteUser(anyUser.id);
+    }
+
+    const user = await this.usersService.create({
+      telegram_id: telegramId,
+      username: telegramUser.username,
+      first_name: telegramUser.first_name,
+      last_name: telegramUser.last_name,
+      photo_url: telegramUser.photo_url,
+      role: UserRole.EMPLOYEE,
+      is_profile_completed: false,
+    });
 
     return this.buildAuthResponse(user);
   }

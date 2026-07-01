@@ -12,9 +12,29 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post('check-user')
+  checkUser(@Body() dto: LoginDto) {
+    return this.authService.checkUser(dto.initData);
+  }
+
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.loginWithInitData(dto.initData);
+  }
+
+  @Post('register')
+  register(@Body() dto: LoginDto) {
+    return this.authService.registerWithInitData(dto.initData);
+  }
+
+  @Post('restore-account')
+  restoreAccount(@Body() dto: LoginDto) {
+    return this.authService.restoreAccount(dto.initData);
+  }
+
+  @Post('recreate-account')
+  recreateAccount(@Body() dto: LoginDto) {
+    return this.authService.recreateAccount(dto.initData);
   }
 
   @Post('login-password')

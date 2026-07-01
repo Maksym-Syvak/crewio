@@ -9,7 +9,7 @@ import type {
   ToastMessage,
   User,
 } from '@/types';
-import { authApi, type CompleteProfilePayload } from '@/api/auth.api';
+import { authApi, type CompleteProfilePayload, type CheckUserResponse } from '@/api/auth.api';
 import { restaurantsApi, inviteApi, type CreateRestaurantPayload } from '@/api/restaurants.api';
 import { employeesApi } from '@/api/employees.api';
 import { shiftsApi } from '@/api/shifts.api';
@@ -27,6 +27,10 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: () => Promise<void>;
+  register: () => Promise<void>;
+  restoreAccount: () => Promise<void>;
+  recreateAccount: () => Promise<void>;
+  checkUser: () => Promise<CheckUserResponse>;
   loginWithPassword: (login: string, password: string) => Promise<void>;
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
@@ -71,6 +75,68 @@ export const useAuthStore = create<AuthState>()(
         } finally {
           set({ isLoading: false });
         }
+      },
+
+      register: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const initData = window.Telegram?.WebApp?.initData;
+          if (!initData) {
+            throw new Error('Відкрийте застосунок у Telegram');
+          }
+          const { accessToken, user } = await authApi.register(initData);
+          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          await get().loadContext().catch(() => undefined);
+        } catch (e) {
+          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          throw e;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      restoreAccount: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const initData = window.Telegram?.WebApp?.initData;
+          if (!initData) {
+            throw new Error('Відкрийте застосунок у Telegram');
+          }
+          const { accessToken, user } = await authApi.restoreAccount(initData);
+          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          await get().loadContext().catch(() => undefined);
+        } catch (e) {
+          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          throw e;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      recreateAccount: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const initData = window.Telegram?.WebApp?.initData;
+          if (!initData) {
+            throw new Error('Відкрийте застосунок у Telegram');
+          }
+          const { accessToken, user } = await authApi.recreateAccount(initData);
+          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          await get().loadContext().catch(() => undefined);
+        } catch (e) {
+          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          throw e;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      checkUser: async () => {
+        const initData = window.Telegram?.WebApp?.initData;
+        if (!initData) {
+          throw new Error('Відкрийте застосунок у Telegram');
+        }
+        return authApi.checkUser(initData);
       },
 
       loginWithPassword: async (login, password) => {

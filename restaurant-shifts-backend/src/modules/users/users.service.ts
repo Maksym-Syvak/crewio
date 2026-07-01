@@ -38,6 +38,34 @@ export class UsersService {
     });
   }
 
+  findAnyByTelegramId(telegramId: string) {
+    return this.usersRepo.findOne({
+      where: { telegram_id: telegramId },
+      withDeleted: true,
+    });
+  }
+
+  async getTelegramUserStatus(telegramId: string) {
+    const user = await this.findAnyByTelegramId(telegramId);
+    if (!user) {
+      return { exists: false, deleted: false, can_restore: false };
+    }
+    if (user.is_deleted) {
+      return { exists: true, deleted: true, can_restore: true };
+    }
+    return { exists: true, deleted: false, can_restore: false };
+  }
+
+  async restoreUser(id: string, data: Partial<User> = {}) {
+    await this.usersRepo.restore(id);
+    await this.usersRepo.update(id, { is_deleted: false, ...data });
+    return this.findById(id);
+  }
+
+  async hardDeleteUser(id: string) {
+    await this.usersRepo.delete(id);
+  }
+
   findById(id: string) {
     return this.usersRepo.findOne({ where: { id, is_deleted: false } });
   }
