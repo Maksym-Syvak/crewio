@@ -117,30 +117,9 @@ export const useAuthStore = create<AuthState>()(
             const owned = await restaurantsApi.list(user.id);
             restaurant = owned[0] ?? null;
           } else {
-            const all = await restaurantsApi.list();
-            for (const r of all) {
-              try {
-                const employees = await employeesApi.list(r.id);
-                const match = employees.find((e) => e.user_id === user.id);
-                if (match) {
-                  restaurant = r;
-                  employee = match;
-                  break;
-                }
-              } catch {
-                // skip unavailable restaurant
-              }
-            }
-            restaurant ??= all[0] ?? null;
-          }
-
-          if (restaurant && !employee) {
-            try {
-              const employees = await employeesApi.list(restaurant.id);
-              employee = employees.find((e) => e.user_id === user.id) ?? null;
-            } catch {
-              // employee lookup optional for new users
-            }
+            const membership = await employeesApi.me();
+            employee = membership.employee;
+            restaurant = membership.restaurant;
           }
 
           set({ restaurant, employee, contextLoaded: true });

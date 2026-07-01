@@ -1,7 +1,14 @@
 import { api } from './client';
-import type { Employee } from '@/types';
+import type { Employee, Restaurant } from '@/types';
 
 export const employeesApi = {
+  me: () =>
+    api
+      .get<{ employee: Employee | null; restaurant: Restaurant | null }>(
+        '/employees/me',
+      )
+      .then((r) => r.data),
+
   list: (restaurantId?: string) =>
     api
       .get<Employee[]>('/employees', { params: { restaurantId } })

@@ -20,5 +20,7 @@ export const authApi = {
   completeProfile: (payload: CompleteProfilePayload) =>
     api.post<AuthResponse>('/auth/complete-profile', payload).then((r) => r.data),
 
+  logout: () => api.post<{ ok: boolean }>('/auth/logout').then((r) => r.data),
+
   me: () => api.post('/auth/me').then((r) => r.data),
 };

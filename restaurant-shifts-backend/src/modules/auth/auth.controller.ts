@@ -30,6 +30,12 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  logout() {
+    return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('me')
   me(@Req() req: any) {
     return req.user;

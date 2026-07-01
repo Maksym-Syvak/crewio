@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -17,6 +17,11 @@ export class EmployeesController {
   @Get()
   findAll(@Query('restaurantId') restaurantId?: string) {
     return this.employeesService.findAll(restaurantId);
+  }
+
+  @Get('me')
+  findMine(@Req() req: { user: { sub: string } }) {
+    return this.employeesService.findMembership(req.user.sub);
   }
 
   @Get(':id')

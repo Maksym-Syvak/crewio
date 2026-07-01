@@ -98,6 +98,7 @@ export class InvitationTokensService {
         name: restaurant.name,
         address: restaurant.address,
         city: restaurant.city,
+        phone: restaurant.phone,
         type: restaurant.type,
       },
     };
@@ -107,6 +108,12 @@ export class InvitationTokensService {
     const invite = await this.validateToken(rawToken);
     const user = await this.usersService.findById(userId);
     if (!user) throw new NotFoundException('User not found');
+
+    if (user.role !== 'employee') {
+      throw new BadRequestException(
+        'Приєднання за кодом доступне лише для ролі «Працівник»',
+      );
+    }
 
     const existing = (await this.employeesService.findAll(invite.restaurant_id)).find(
       (e) => e.user_id === userId,

@@ -124,9 +124,22 @@ export function needsVenueSetup(
 ) {
   const profileDone = Boolean(user?.is_profile_completed || profileSubmitted);
   if (!profileDone) return false;
-  if (profileSubmitted && !restaurant && !employee) return true;
+
+  const role = effectiveOnboardingRole(
+    user,
+    useOnboardingStore.getState().selectedRole,
+    profileSubmitted,
+  );
+
+  if (role === 'employee') {
+    if (profileSubmitted && !employee) return true;
+    if (!contextLoaded) return false;
+    return !employee;
+  }
+
+  if (profileSubmitted && !restaurant) return true;
   if (!contextLoaded) return false;
-  return !restaurant && !employee;
+  return !restaurant;
 }
 
 export function effectiveOnboardingRole(

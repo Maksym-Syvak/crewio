@@ -1,11 +1,13 @@
 import { useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore, useNotificationsStore, useShiftsStore } from '@/store';
 import { ShiftCard } from '@/components/ShiftCard';
 import { PageSkeleton } from '@/components/Skeleton';
 import { dayjs } from '@/utils/dates';
+import { ONBOARDING_PATHS } from '@/store/onboarding';
 
 export default function HomePage() {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
@@ -61,6 +63,28 @@ export default function HomePage() {
   ).length;
 
   if (isLoading && !shifts.length) return <PageSkeleton />;
+
+  if (user?.role === 'employee' && !employee) {
+    return (
+      <div className="page">
+        <h1 className="page-title">Привіт, {user.first_name} 👋</h1>
+        <div className="card mt-6 text-center">
+          <p className="text-lg font-medium">Ви ще не підключені до закладу</p>
+          <p className="mt-2 text-sm text-[var(--tg-hint)]">
+            Отримайте код запрошення від адміністратора та приєднайтесь до
+            команди
+          </p>
+          <button
+            type="button"
+            className="btn-primary mt-4"
+            onClick={() => navigate(ONBOARDING_PATHS.join)}
+          >
+            Ввести код
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">

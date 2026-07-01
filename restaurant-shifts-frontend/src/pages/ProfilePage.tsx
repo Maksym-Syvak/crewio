@@ -1,32 +1,28 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
-import { useOnboardingStore } from '@/store/onboarding';
 import { ROLE_LABELS, canManageStaff } from '@/utils/roles';
-import { isTelegramEnv } from '@/services/telegram';
-import { markLoggedOut } from '@/utils/session';
-import { disconnectSocket } from '@/sockets/events';
+import { LogoutModal } from '@/components/LogoutModal';
+import { clearAppSession } from '@/utils/session';
+import { ONBOARDING_PATHS } from '@/store/onboarding';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
-  const logout = useAuthStore((s) => s.logout);
-  const resetOnboarding = useOnboardingStore((s) => s.reset);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
-  const handleLogout = () => {
-    markLoggedOut();
-    resetOnboarding();
-    disconnectSocket();
-    logout();
-
-    const tg = window.Telegram?.WebApp;
-    if (isTelegramEnv() && tg?.close) {
-      tg.close();
-      return;
+  const handleLogoutConfirm = async () => {
+    setLogoutLoading(true);
+    try {
+      await clearAppSession();
+      navigate('/splash', { replace: true });
+    } finally {
+      setLogoutLoading(false);
+      setLogoutOpen(false);
     }
-
-    navigate('/splash', { replace: true });
   };
 
   const openStatistics = () => {
@@ -36,6 +32,12 @@ export default function ProfilePage() {
   const openStaff = () => {
     navigate('/staff');
   };
+
+  const openJoin = () => {
+    navigate(ONBOARDING_PATHS.join);
+  };
+
+  const isEmployeeWithoutVenue = user?.role === 'employee' && !employee;
 
   return (
     <div className="page">
@@ -62,6 +64,15 @@ export default function ProfilePage() {
         )}
       </div>
 
+      {isEmployeeWithoutVenue && (
+        <div className="card mt-4 text-center text-sm">
+          <p className="font-medium">Ви ще не підключені до закладу</p>
+          <button type="button" className="btn-primary mt-3" onClick={openJoin}>
+            Ввести код
+          </button>
+        </div>
+      )}
+
       <dl className="card mt-6 space-y-3 text-sm">
         <Row label="Telegram ID" value={user?.telegram_id ?? '—'} />
         <Row label="Посада" value={employee?.position?.name ?? '—'} />
@@ -72,18 +83,27 @@ export default function ProfilePage() {
       </dl>
 
       <div className="mt-6 space-y-2 pb-4">
-        <button type="button" className="btn-secondary" onClick={openStatistics}>
-          Статистика
-        </button>
+        {!isEmployeeWithoutVenue && (
+          <button type="button" className="btn-secondary" onClick={openStatistics}>
+            Статистика
+          </button>
+        )}
         {user && canManageStaff(user.role) && (
           <button type="button" className="btn-secondary" onClick={openStaff}>
             Персонал
           </button>
         )}
-        <button type="button" className="btn-danger" onClick={handleLogout}>
+        <button type="button" className="btn-danger" onClick={() => setLogoutOpen(true)}>
           Вийти
         </button>
       </div>
+
+      <LogoutModal
+        open={logoutOpen}
+        loading={logoutLoading}
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={handleLogoutConfirm}
+      />
     </div>
   );
 }

@@ -5,8 +5,7 @@ import {
   pathToStep,
   useOnboardingStore,
 } from '@/store/onboarding';
-import { useAuthStore } from '@/store';
-import { isTelegramEnv } from '@/services/telegram';
+import { clearAppSession } from '@/utils/session';
 
 export function useOnboardingNavigation() {
   const navigate = useNavigate();
@@ -15,7 +14,6 @@ export function useOnboardingNavigation() {
   const step = pathToStep(pathname);
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
   const reset = useOnboardingStore((s) => s.reset);
-  const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
     setCurrentStep(step);
@@ -26,16 +24,11 @@ export function useOnboardingNavigation() {
     navigate(backPath);
   }, [backPath, navigate]);
 
-  const cancelRegistration = useCallback(() => {
+  const cancelRegistration = useCallback(async () => {
     reset();
-    logout();
-    const tg = window.Telegram?.WebApp;
-    if (isTelegramEnv() && tg?.close) {
-      tg.close();
-      return;
-    }
+    await clearAppSession();
     navigate('/splash', { replace: true });
-  }, [reset, logout, navigate]);
+  }, [reset, navigate]);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;

@@ -94,7 +94,10 @@ export interface InvitationToken {
 
 export interface InvitePreview {
   token: string;
-  restaurant: Pick<Restaurant, 'id' | 'name' | 'address' | 'city' | 'type'>;
+  restaurant: Pick<
+    Restaurant,
+    'id' | 'name' | 'address' | 'city' | 'type' | 'phone'
+  >;
 }
 
 export interface Position {

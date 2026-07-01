@@ -28,6 +28,17 @@ export class EmployeesService {
     return employee;
   }
 
+  async findMembership(userId: string) {
+    const employee = await this.employeesRepo.findOne({
+      where: { user_id: userId },
+      relations: ['user', 'position', 'restaurant'],
+    });
+    if (!employee) {
+      return { employee: null, restaurant: null };
+    }
+    return { employee, restaurant: employee.restaurant ?? null };
+  }
+
   create(dto: CreateEmployeeDto) {
     return this.employeesRepo.save(this.employeesRepo.create(dto));
   }
