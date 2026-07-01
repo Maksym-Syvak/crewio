@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
 import { isTelegramEnv } from '@/services/telegram';
 import { getPostLoginPath } from '@/store/onboarding';
+import { clearLoggedOut, isLoggedOut } from '@/utils/session';
 
 export default function SplashPage() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function SplashPage() {
   const error = useAuthStore((s) => s.error);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [devId, setDevId] = useState('000000001');
+  const [loggedOut, setLoggedOut] = useState(() => isLoggedOut());
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -21,6 +23,8 @@ export default function SplashPage() {
 
   useEffect(() => {
     if (!isTelegramEnv()) return;
+    if (isLoggedOut()) return;
+
     login()
       .then(() => {
         navigate(getPostLoginPath(), { replace: true });
@@ -28,7 +32,20 @@ export default function SplashPage() {
       .catch(() => undefined);
   }, [login, navigate]);
 
+  const handleTelegramLogin = async () => {
+    clearLoggedOut();
+    setLoggedOut(false);
+    try {
+      await login();
+      navigate(getPostLoginPath(), { replace: true });
+    } catch {
+      // error shown via store
+    }
+  };
+
   const handleDevLogin = async () => {
+    clearLoggedOut();
+    setLoggedOut(false);
     await devLogin(devId);
     navigate(getPostLoginPath(), { replace: true });
   };
@@ -56,6 +73,17 @@ export default function SplashPage() {
         <p className="max-w-xs text-center text-sm text-[var(--crew-crimson)]">
           {error}
         </p>
+      )}
+
+      {isTelegramEnv() && loggedOut && !isLoading && (
+        <div className="w-full max-w-xs space-y-3">
+          <p className="text-center text-sm text-[var(--tg-hint)]">
+            Ви вийшли з акаунту
+          </p>
+          <button type="button" className="btn-primary" onClick={handleTelegramLogin}>
+            Увійти знову
+          </button>
+        </div>
       )}
 
       {!isTelegramEnv() && !isLoading && (

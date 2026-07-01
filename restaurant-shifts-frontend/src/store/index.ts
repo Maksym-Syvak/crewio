@@ -15,6 +15,7 @@ import { employeesApi } from '@/api/employees.api';
 import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
 import { getErrorMessage, withRetry } from '@/api/client';
+import { clearLoggedOut } from '@/utils/session';
 
 interface AuthState {
   user: User | null;
@@ -63,6 +64,7 @@ export const useAuthStore = create<AuthState>()(
             authApi.login(initData),
           );
           set({ token: accessToken, user, isAuthenticated: true });
+          clearLoggedOut();
           await get().loadContext().catch(() => undefined);
         } catch (e) {
           set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
@@ -80,6 +82,7 @@ export const useAuthStore = create<AuthState>()(
             'Dev User',
           );
           set({ token: accessToken, user, isAuthenticated: true });
+          clearLoggedOut();
           await get().loadContext().catch(() => undefined);
         } catch (e) {
           set({ error: getErrorMessage(e) });

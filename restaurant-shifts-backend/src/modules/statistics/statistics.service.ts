@@ -5,6 +5,13 @@ import { Statistics } from './entities/statistics.entity';
 import { Employee } from '../employees/entities/employee.entity';
 import { ShiftEmployee } from '../shifts/entities/shift-employee.entity';
 
+function normalizeMonth(month?: string) {
+  if (!month) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(month)) return month;
+  if (/^\d{4}-\d{2}$/.test(month)) return `${month}-01`;
+  return month;
+}
+
 @Injectable()
 export class StatisticsService {
   constructor(
@@ -17,9 +24,10 @@ export class StatisticsService {
   ) {}
 
   findAll(filters: { employeeId?: string; month?: string }) {
-    const where: any = {};
+    const where: Record<string, string> = {};
     if (filters.employeeId) where.employee_id = filters.employeeId;
-    if (filters.month) where.month = filters.month;
+    const month = normalizeMonth(filters.month);
+    if (month) where.month = month;
     return this.statsRepo.find({ where });
   }
 

@@ -1,6 +1,10 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
+import { useOnboardingStore } from '@/store/onboarding';
 import { ROLE_LABELS, canManageStaff } from '@/utils/roles';
+import { isTelegramEnv } from '@/services/telegram';
+import { markLoggedOut } from '@/utils/session';
+import { disconnectSocket } from '@/sockets/events';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -8,10 +12,29 @@ export default function ProfilePage() {
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
   const logout = useAuthStore((s) => s.logout);
+  const resetOnboarding = useOnboardingStore((s) => s.reset);
 
   const handleLogout = () => {
+    markLoggedOut();
+    resetOnboarding();
+    disconnectSocket();
     logout();
+
+    const tg = window.Telegram?.WebApp;
+    if (isTelegramEnv() && tg?.close) {
+      tg.close();
+      return;
+    }
+
     navigate('/splash', { replace: true });
+  };
+
+  const openStatistics = () => {
+    navigate('/statistics');
+  };
+
+  const openStaff = () => {
+    navigate('/staff');
   };
 
   return (
@@ -48,14 +71,14 @@ export default function ProfilePage() {
         />
       </dl>
 
-      <div className="mt-6 space-y-2">
-        <Link to="/statistics" className="btn-secondary block text-center">
+      <div className="mt-6 space-y-2 pb-4">
+        <button type="button" className="btn-secondary" onClick={openStatistics}>
           Статистика
-        </Link>
+        </button>
         {user && canManageStaff(user.role) && (
-          <Link to="/staff" className="btn-secondary block text-center">
+          <button type="button" className="btn-secondary" onClick={openStaff}>
             Персонал
-          </Link>
+          </button>
         )}
         <button type="button" className="btn-danger" onClick={handleLogout}>
           Вийти
