@@ -1,9 +1,10 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/entities/user.entity';
+import { CompleteProfileDto } from './dto/complete-profile.dto';
 
 interface TelegramAuthData {
   id: number;
@@ -80,6 +81,7 @@ export class AuthService {
         last_name: telegramUser.last_name,
         photo_url: telegramUser.photo_url,
         role: UserRole.EMPLOYEE,
+        is_profile_completed: false,
       });
     }
 
@@ -104,6 +106,7 @@ export class AuthService {
         telegram_id: telegramId,
         first_name: firstName,
         role: UserRole.EMPLOYEE,
+        is_profile_completed: false,
       });
     }
 
@@ -114,5 +117,33 @@ export class AuthService {
     });
 
     return { accessToken, user };
+  }
+
+  private signToken(user: { id: string; telegram_id: string; role: UserRole }) {
+    return this.jwtService.signAsync({
+      sub: user.id,
+      telegram_id: user.telegram_id,
+      role: user.role,
+    });
+  }
+
+  async completeProfile(userId: string, dto: CompleteProfileDto) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new UnauthorizedException('User not found');
+
+    if (user.is_profile_completed) {
+      throw new BadRequestException('Профіль вже заповнено');
+    }
+
+    const updated = await this.usersService.update(userId, {
+      first_name: dto.first_name,
+      last_name: dto.last_name,
+      phone: dto.phone,
+      role: dto.role,
+      is_profile_completed: true,
+    });
+
+    const accessToken = await this.signToken(updated!);
+    return { accessToken, user: updated };
   }
 }

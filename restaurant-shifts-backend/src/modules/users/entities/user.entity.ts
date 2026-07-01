@@ -31,8 +31,14 @@ export class User {
   @Column({ nullable: true })
   last_name: string;
 
+  @Column({ length: 30, nullable: true })
+  phone: string;
+
   @Column({ nullable: true })
   photo_url: string;
+
+  @Column({ default: false })
+  is_profile_completed: boolean;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.EMPLOYEE })
   role: UserRole;

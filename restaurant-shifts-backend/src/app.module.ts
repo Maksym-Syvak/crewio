@@ -16,6 +16,7 @@ import { ReplacementRequestsModule } from './modules/replacement-requests/replac
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { InvitationTokensModule } from './modules/invitation-tokens/invitation-tokens.module';
 import { EventsModule } from './modules/events/events.module';
 import { HealthController } from './health.controller';
 
@@ -39,6 +40,7 @@ import { HealthController } from './health.controller';
     NotificationsModule,
     StatisticsModule,
     TelegramModule,
+    InvitationTokensModule,
     EventsModule,
   ],
 })

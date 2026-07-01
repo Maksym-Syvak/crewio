@@ -18,6 +18,9 @@ export enum RestaurantType {
   BAR = 'bar',
   COFFEE_SHOP = 'coffee_shop',
   FAST_FOOD = 'fast_food',
+  PIZZERIA = 'pizzeria',
+  SUSHI = 'sushi',
+  HOOKAH = 'hookah',
   OTHER = 'other',
 }
 
@@ -38,6 +41,24 @@ export class Restaurant {
 
   @Column()
   address: string;
+
+  @Column({ nullable: true })
+  city: string;
+
+  @Column({ nullable: true })
+  region: string;
+
+  @Column({ nullable: true })
+  country: string;
+
+  @Column({ nullable: true })
+  email: string;
+
+  @Column({ nullable: true })
+  website: string;
+
+  @Column({ type: 'int', nullable: true })
+  employees_limit: number;
 
   @Column({ type: 'double precision', nullable: true })
   latitude: number;

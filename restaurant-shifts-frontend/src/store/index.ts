@@ -2,14 +2,15 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   Employee,
+  InvitationToken,
   Notification,
   Restaurant,
   Shift,
   ToastMessage,
   User,
 } from '@/types';
-import { authApi } from '@/api/auth.api';
-import { restaurantsApi } from '@/api/restaurants.api';
+import { authApi, type CompleteProfilePayload } from '@/api/auth.api';
+import { restaurantsApi, inviteApi, type CreateRestaurantPayload } from '@/api/restaurants.api';
 import { employeesApi } from '@/api/employees.api';
 import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
@@ -20,6 +21,7 @@ interface AuthState {
   token: string | null;
   employee: Employee | null;
   restaurant: Restaurant | null;
+  activeInvitation: InvitationToken | null;
   contextLoaded: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -28,6 +30,10 @@ interface AuthState {
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
   loadContext: () => Promise<void>;
+  completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
+  createRestaurant: (payload: CreateRestaurantPayload) => Promise<void>;
+  joinWithInvite: (token: string) => Promise<void>;
+  refreshInvite: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -37,6 +43,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       employee: null,
       restaurant: null,
+      activeInvitation: null,
       contextLoaded: false,
       isAuthenticated: false,
       isLoading: false,
@@ -88,6 +95,7 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           employee: null,
           restaurant: null,
+          activeInvitation: null,
           contextLoaded: false,
           isAuthenticated: false,
           error: null,
@@ -102,7 +110,7 @@ export const useAuthStore = create<AuthState>()(
           let restaurant = null as Restaurant | null;
           let employee: Employee | null = null;
 
-          if (user.role === 'owner') {
+          if (user.role === 'owner' || user.role === 'admin') {
             const owned = await restaurantsApi.list(user.id);
             restaurant = owned[0] ?? null;
           } else {
@@ -134,9 +142,39 @@ export const useAuthStore = create<AuthState>()(
 
           set({ restaurant, employee, contextLoaded: true });
         } catch {
-          // New users may have no restaurant yet — still allow app access
           set({ restaurant: null, employee: null, contextLoaded: true });
         }
+      },
+
+      completeProfile: async (payload) => {
+        const { accessToken, user } = await authApi.completeProfile(payload);
+        set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+        await get().loadContext().catch(() => undefined);
+      },
+
+      createRestaurant: async (payload) => {
+        const { restaurant, invitation } = await restaurantsApi.create(payload);
+        set({
+          restaurant,
+          activeInvitation: invitation,
+          contextLoaded: true,
+        });
+      },
+
+      joinWithInvite: async (token) => {
+        const { employee, restaurant } = await inviteApi.join(token);
+        set({
+          employee: employee as Employee,
+          restaurant,
+          contextLoaded: true,
+        });
+      },
+
+      refreshInvite: async () => {
+        const { restaurant } = get();
+        if (!restaurant) return;
+        const invitation = await restaurantsApi.regenerateInvite(restaurant.id);
+        set({ activeInvitation: invitation });
       },
     }),
     {

@@ -1,16 +1,60 @@
-import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Min,
+} from 'class-validator';
 import { RestaurantType } from '../entities/restaurant.entity';
 
 export class CreateRestaurantDto {
   @IsString()
   name: string;
 
+  @IsEnum(RestaurantType)
+  type: RestaurantType;
+
   @IsString()
   address: string;
 
   @IsOptional()
   @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  region?: string;
+
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @IsOptional()
+  @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  website?: string;
+
+  @IsOptional()
+  @IsString()
+  open_time?: string;
+
+  @IsOptional()
+  @IsString()
+  close_time?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  employees_limit?: number;
 
   @IsOptional()
   @IsNumber()
@@ -21,10 +65,6 @@ export class CreateRestaurantDto {
   longitude?: number;
 
   @IsOptional()
-  @IsEnum(RestaurantType)
-  type?: RestaurantType;
-
-  @IsOptional()
   working_hours?: Record<string, string>;
 
   @IsOptional()
@@ -32,8 +72,6 @@ export class CreateRestaurantDto {
   staff_count?: number;
 }
 
-// Variant 2 from the TOR: import a restaurant from Google Maps/Places by
-// name + address instead of filling the form manually.
 export class ImportRestaurantFromGoogleDto {
   @IsString()
   name: string;

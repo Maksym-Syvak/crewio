@@ -22,7 +22,12 @@ export default function StaffPage() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Персонал</h1>
+      <div className="mb-3 flex items-center justify-between">
+        <h1 className="page-title mb-0">Персонал</h1>
+        <Link to="/staff/invite" className="text-sm text-[var(--tg-link)]">
+          + Запросити
+        </Link>
+      </div>
       <ul className="space-y-2">
         {staff.map((e) => (
           <li key={e.id} className="card flex items-center gap-3">

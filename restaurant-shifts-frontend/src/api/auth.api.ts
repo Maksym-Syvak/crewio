@@ -1,5 +1,12 @@
 import { api } from './client';
-import type { AuthResponse } from '@/types';
+import type { AuthResponse, UserRole } from '@/types';
+
+export interface CompleteProfilePayload {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  role: UserRole;
+}
 
 export const authApi = {
   login: (initData: string) =>
@@ -9,6 +16,9 @@ export const authApi = {
     api
       .post<AuthResponse>('/auth/dev-login', { telegram_id, first_name })
       .then((r) => r.data),
+
+  completeProfile: (payload: CompleteProfilePayload) =>
+    api.post<AuthResponse>('/auth/complete-profile', payload).then((r) => r.data),
 
   me: () => api.post('/auth/me').then((r) => r.data),
 };

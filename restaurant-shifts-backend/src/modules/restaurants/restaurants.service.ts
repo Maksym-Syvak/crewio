@@ -31,7 +31,29 @@ export class RestaurantsService {
   }
 
   create(ownerId: string, dto: CreateRestaurantDto) {
-    const restaurant = this.restaurantsRepo.create({ ...dto, owner_id: ownerId });
+    const working_hours =
+      dto.working_hours ??
+      (dto.open_time && dto.close_time
+        ? { default: `${dto.open_time}-${dto.close_time}` }
+        : undefined);
+
+    const restaurant = this.restaurantsRepo.create({
+      name: dto.name,
+      type: dto.type,
+      address: dto.address,
+      city: dto.city,
+      region: dto.region,
+      country: dto.country,
+      phone: dto.phone,
+      email: dto.email,
+      website: dto.website,
+      employees_limit: dto.employees_limit,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      working_hours,
+      staff_count: dto.staff_count ?? dto.employees_limit ?? 0,
+      owner_id: ownerId,
+    });
     return this.restaurantsRepo.save(restaurant);
   }
 

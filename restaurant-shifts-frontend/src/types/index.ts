@@ -6,6 +6,9 @@ export type RestaurantType =
   | 'bar'
   | 'coffee_shop'
   | 'fast_food'
+  | 'pizzeria'
+  | 'sushi'
+  | 'hookah'
   | 'other';
 
 export type EmployeeStatus =
@@ -50,8 +53,10 @@ export interface User {
   username?: string;
   first_name: string;
   last_name?: string;
+  phone?: string;
   photo_url?: string;
   role: UserRole;
+  is_profile_completed: boolean;
   created_at: string;
 }
 
@@ -60,9 +65,15 @@ export interface Restaurant {
   owner_id: string;
   name: string;
   address: string;
+  city?: string;
+  region?: string;
+  country?: string;
   latitude?: number;
   longitude?: number;
   phone?: string;
+  email?: string;
+  website?: string;
+  employees_limit?: number;
   working_hours?: Record<string, string>;
   type: RestaurantType;
   staff_count: number;
@@ -70,6 +81,20 @@ export interface Restaurant {
   created_at: string;
   positions?: Position[];
   employees?: Employee[];
+}
+
+export interface InvitationToken {
+  id: string;
+  restaurant_id: string;
+  token: string;
+  is_active: boolean;
+  expires_at?: string | null;
+  created_at: string;
+}
+
+export interface InvitePreview {
+  token: string;
+  restaurant: Pick<Restaurant, 'id' | 'name' | 'address' | 'city' | 'type'>;
 }
 
 export interface Position {
