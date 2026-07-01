@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useToastStore } from '@/store';
 import { getErrorMessage } from '@/api/client';
+import type { CreateRestaurantPayload } from '@/api/restaurants.api';
 import {
   ensureOnboardingProfileComplete,
   ONBOARDING_PATHS,
@@ -38,54 +39,79 @@ const schema = z.object({
   website: z.string().optional(),
   open_time: z.string().optional(),
   close_time: z.string().optional(),
-  employees_limit: z.number().min(1).optional(),
+  employees_limit: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
+
+function sanitizePayload(data: FormData): CreateRestaurantPayload {
+  const rawLimit = data.employees_limit?.trim();
+  const parsedLimit = rawLimit ? Number(rawLimit) : undefined;
+  const employeesLimit =
+    parsedLimit !== undefined && !Number.isNaN(parsedLimit) && parsedLimit > 0
+      ? parsedLimit
+      : undefined;
+
+  return {
+    name: data.name.trim(),
+    type: data.type,
+    address: data.address.trim(),
+    city: data.city.trim(),
+    region: data.region?.trim() || undefined,
+    country: data.country?.trim() || undefined,
+    phone: data.phone?.trim() || undefined,
+    email: data.email?.trim() || undefined,
+    website: data.website?.trim() || undefined,
+    open_time: data.open_time || undefined,
+    close_time: data.close_time || undefined,
+    employees_limit: employeesLimit,
+  };
+}
 
 export default function CreateRestaurantPage() {
   const navigate = useNavigate();
   const createRestaurant = useAuthStore((s) => s.createRestaurant);
   const push = useToastStore((s) => s.push);
-  const restaurantData = useOnboardingStore((s) => s.restaurantData);
   const setRestaurantData = useOnboardingStore((s) => s.setRestaurantData);
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
 
   const {
     register,
     handleSubmit,
-    watch,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       country: 'Україна',
-      employees_limit: 10,
-      ...restaurantData,
+      employees_limit: '10',
     },
   });
 
   useEffect(() => {
-    reset({
-      country: 'Україна',
-      employees_limit: 10,
-      ...restaurantData,
-    });
-  }, [restaurantData, reset]);
+    const hydrate = () => {
+      const saved = useOnboardingStore.getState().restaurantData;
+      if (!saved) return;
+      reset({
+        country: 'Україна',
+        ...saved,
+        employees_limit:
+          saved.employees_limit != null
+            ? String(saved.employees_limit)
+            : '10',
+      });
+    };
 
-  useEffect(() => {
-    const sub = watch((values) => {
-      setRestaurantData(values);
-    });
-    return () => sub.unsubscribe();
-  }, [watch, setRestaurantData]);
+    hydrate();
+    return useOnboardingStore.persist.onFinishHydration(hydrate);
+  }, [reset]);
 
   const onSubmit = async (data: FormData) => {
+    const payload = sanitizePayload(data);
     try {
       await ensureOnboardingProfileComplete();
-      await createRestaurant(data);
-      setRestaurantData(data);
+      await createRestaurant(payload);
+      setRestaurantData(payload);
       setCurrentStep('invite');
       push({ type: 'success', title: 'Заклад створено!' });
       navigate(ONBOARDING_PATHS.invite);
@@ -159,7 +185,7 @@ export default function CreateRestaurantPage() {
               className="field-input"
               type="number"
               min={1}
-              {...register('employees_limit', { valueAsNumber: true })}
+              {...register('employees_limit')}
             />
           </Field>
         </Section>

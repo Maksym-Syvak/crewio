@@ -4,8 +4,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUrl,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { RestaurantType } from '../entities/restaurant.entity';
 
@@ -36,6 +36,7 @@ export class CreateRestaurantDto {
   phone?: string;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
   @IsEmail()
   email?: string;
 

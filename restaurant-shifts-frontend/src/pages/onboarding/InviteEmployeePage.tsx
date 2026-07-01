@@ -60,7 +60,8 @@ export default function InviteEmployeePage() {
         <div className="card mb-4 text-sm">
           <div className="font-semibold">{restaurant.name}</div>
           <div className="text-[var(--tg-hint)]">
-            {RESTAURANT_TYPE_LABELS[restaurant.type]} · {restaurant.city}
+            {RESTAURANT_TYPE_LABELS[restaurant.type] ?? restaurant.type} ·{' '}
+            {restaurant.city ?? '—'}
           </div>
         </div>
       )}
