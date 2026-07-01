@@ -13,13 +13,14 @@ import { restaurantsApi } from '@/api/restaurants.api';
 import { employeesApi } from '@/api/employees.api';
 import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
-import { getErrorMessage } from '@/api/client';
+import { getErrorMessage, withRetry } from '@/api/client';
 
 interface AuthState {
   user: User | null;
   token: string | null;
   employee: Employee | null;
   restaurant: Restaurant | null;
+  contextLoaded: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -36,6 +37,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       employee: null,
       restaurant: null,
+      contextLoaded: false,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -50,11 +52,13 @@ export const useAuthStore = create<AuthState>()(
           }
           tg.ready();
           tg.expand();
-          const { accessToken, user } = await authApi.login(initData);
+          const { accessToken, user } = await withRetry(() =>
+            authApi.login(initData),
+          );
           set({ token: accessToken, user, isAuthenticated: true });
-          await get().loadContext();
+          await get().loadContext().catch(() => undefined);
         } catch (e) {
-          set({ error: getErrorMessage(e), isAuthenticated: false });
+          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
           throw e;
         } finally {
           set({ isLoading: false });
@@ -69,7 +73,7 @@ export const useAuthStore = create<AuthState>()(
             'Dev User',
           );
           set({ token: accessToken, user, isAuthenticated: true });
-          await get().loadContext();
+          await get().loadContext().catch(() => undefined);
         } catch (e) {
           set({ error: getErrorMessage(e) });
           throw e;
@@ -84,41 +88,55 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           employee: null,
           restaurant: null,
+          contextLoaded: false,
           isAuthenticated: false,
           error: null,
         });
       },
 
       loadContext: async () => {
-        const { user } = get();
-        if (!user) return;
+        const { user, contextLoaded } = get();
+        if (!user || contextLoaded) return;
 
-        let restaurant = null as Restaurant | null;
-        let employee: Employee | null = null;
+        try {
+          let restaurant = null as Restaurant | null;
+          let employee: Employee | null = null;
 
-        if (user.role === 'owner') {
-          const owned = await restaurantsApi.list(user.id);
-          restaurant = owned[0] ?? null;
-        } else {
-          const all = await restaurantsApi.list();
-          for (const r of all) {
-            const employees = await employeesApi.list(r.id);
-            const match = employees.find((e) => e.user_id === user.id);
-            if (match) {
-              restaurant = r;
-              employee = match;
-              break;
+          if (user.role === 'owner') {
+            const owned = await restaurantsApi.list(user.id);
+            restaurant = owned[0] ?? null;
+          } else {
+            const all = await restaurantsApi.list();
+            for (const r of all) {
+              try {
+                const employees = await employeesApi.list(r.id);
+                const match = employees.find((e) => e.user_id === user.id);
+                if (match) {
+                  restaurant = r;
+                  employee = match;
+                  break;
+                }
+              } catch {
+                // skip unavailable restaurant
+              }
+            }
+            restaurant ??= all[0] ?? null;
+          }
+
+          if (restaurant && !employee) {
+            try {
+              const employees = await employeesApi.list(restaurant.id);
+              employee = employees.find((e) => e.user_id === user.id) ?? null;
+            } catch {
+              // employee lookup optional for new users
             }
           }
-          restaurant ??= all[0] ?? null;
-        }
 
-        if (restaurant && !employee) {
-          const employees = await employeesApi.list(restaurant.id);
-          employee = employees.find((e) => e.user_id === user.id) ?? null;
+          set({ restaurant, employee, contextLoaded: true });
+        } catch {
+          // New users may have no restaurant yet — still allow app access
+          set({ restaurant: null, employee: null, contextLoaded: true });
         }
-
-        set({ restaurant, employee });
       },
     }),
     {
@@ -233,10 +251,15 @@ export const useToastStore = create<ToastState>((set, get) => ({
 
 interface AppState {
   isOnline: boolean;
+  apiUnreachable: boolean;
   setOnline: (v: boolean) => void;
+  setApiUnreachable: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  isOnline: navigator.onLine,
-  setOnline: (v) => set({ isOnline: v }),
+  isOnline: true,
+  apiUnreachable: false,
+  setOnline: (v) =>
+    set({ isOnline: v, apiUnreachable: v ? false : true }),
+  setApiUnreachable: (v) => set({ apiUnreachable: v }),
 }));

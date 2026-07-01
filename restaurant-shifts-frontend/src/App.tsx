@@ -30,21 +30,27 @@ function AppBootstrap() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const logout = useAuthStore((s) => s.logout);
   const loadContext = useAuthStore((s) => s.loadContext);
+  const contextLoaded = useAuthStore((s) => s.contextLoaded);
   const setOnline = useAppStore((s) => s.setOnline);
+  const setApiUnreachable = useAppStore((s) => s.setApiUnreachable);
 
   useEffect(() => {
     initTelegramApp();
     setupApiInterceptors(
       () => useAuthStore.getState().token,
       () => logout(),
+      {
+        onFail: () => setApiUnreachable(true),
+        onOk: () => setApiUnreachable(false),
+      },
     );
-  }, [logout]);
+  }, [logout, setApiUnreachable]);
 
   useEffect(() => {
-    if (isAuthenticated && token && user && !restaurant) {
+    if (isAuthenticated && token && user && !contextLoaded) {
       loadContext();
     }
-  }, [isAuthenticated, token, user, restaurant, loadContext]);
+  }, [isAuthenticated, token, user, contextLoaded, loadContext]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {

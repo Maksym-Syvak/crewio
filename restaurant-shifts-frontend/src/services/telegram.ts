@@ -1,25 +1,40 @@
+/** Apply Crewio burgundy theme; respect Telegram light/dark mode. */
 export function initTelegramApp() {
   const tg = window.Telegram?.WebApp;
-  if (!tg) return null;
-
-  tg.ready();
-  tg.expand();
-
   const root = document.documentElement;
-  const tp = tg.themeParams;
 
-  if (tp.bg_color) root.style.setProperty('--tg-bg', tp.bg_color);
-  if (tp.text_color) root.style.setProperty('--tg-text', tp.text_color);
-  if (tp.hint_color) root.style.setProperty('--tg-hint', tp.hint_color);
-  if (tp.link_color) root.style.setProperty('--tg-link', tp.link_color);
-  if (tp.button_color) root.style.setProperty('--tg-button', tp.button_color);
-  if (tp.button_text_color)
-    root.style.setProperty('--tg-button-text', tp.button_text_color);
-  if (tp.secondary_bg_color)
-    root.style.setProperty('--tg-secondary-bg', tp.secondary_bg_color);
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    root.dataset.theme = tg.colorScheme;
+  } else {
+    root.dataset.theme = 'light';
+  }
 
-  root.dataset.theme = tg.colorScheme;
-  return tg;
+  applyCrewioTheme(root.dataset.theme === 'dark');
+  return tg ?? null;
+}
+
+function applyCrewioTheme(isDark: boolean) {
+  const root = document.documentElement;
+
+  if (isDark) {
+    root.style.setProperty('--tg-bg', '#1a0a10');
+    root.style.setProperty('--tg-text', '#fce8ee');
+    root.style.setProperty('--tg-hint', '#b8909c');
+    root.style.setProperty('--tg-secondary-bg', '#2d1520');
+    root.style.setProperty('--tg-link', '#e85d7a');
+    root.style.setProperty('--tg-button', '#a91d47');
+    root.style.setProperty('--tg-button-text', '#ffffff');
+  } else {
+    root.style.setProperty('--tg-bg', '#fdf5f6');
+    root.style.setProperty('--tg-text', '#2d0a14');
+    root.style.setProperty('--tg-hint', '#9a6b76');
+    root.style.setProperty('--tg-secondary-bg', '#f8e8ec');
+    root.style.setProperty('--tg-link', '#8b1538');
+    root.style.setProperty('--tg-button', '#8b1538');
+    root.style.setProperty('--tg-button-text', '#ffffff');
+  }
 }
 
 export function isTelegramEnv() {

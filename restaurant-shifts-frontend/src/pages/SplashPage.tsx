@@ -32,7 +32,7 @@ export default function SplashPage() {
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
-      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[var(--tg-button)] text-3xl text-white">
+      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--crew-burgundy)] to-[var(--crew-burgundy-dark)] text-3xl font-bold text-white shadow-lg">
         C
       </div>
       <div className="text-center">
@@ -50,7 +50,7 @@ export default function SplashPage() {
       )}
 
       {error && (
-        <p className="max-w-xs text-center text-sm text-[var(--crew-red)]">
+        <p className="max-w-xs text-center text-sm text-[var(--crew-crimson)]">
           {error}
         </p>
       )}

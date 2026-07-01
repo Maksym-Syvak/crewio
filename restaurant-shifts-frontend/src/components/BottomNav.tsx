@@ -14,7 +14,7 @@ export function BottomNav() {
   const unread = useNotificationsStore((s) => s.unreadCount);
 
   return (
-    <nav className="fixed right-0 bottom-0 left-0 z-40 border-t border-black/5 bg-[var(--tg-bg)] pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed right-0 bottom-0 left-0 z-40 border-t border-[color-mix(in_srgb,var(--crew-burgundy)_12%,transparent)] bg-[var(--tg-bg)] pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-lg items-stretch justify-around">
         {items.map((item) => (
           <NavLink

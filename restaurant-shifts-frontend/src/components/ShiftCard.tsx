@@ -11,8 +11,8 @@ interface Props {
 
 const variantStyles = {
   mine: 'border-l-4 border-l-[var(--crew-green)]',
-  available: 'border-l-4 border-l-[var(--crew-blue)]',
-  urgent: 'border-l-4 border-l-[var(--crew-red)]',
+  available: 'border-l-4 border-l-[var(--crew-burgundy-light)]',
+  urgent: 'border-l-4 border-l-[var(--crew-crimson)]',
   dayoff: 'border-l-4 border-l-[var(--crew-gray)] opacity-70',
 };
 

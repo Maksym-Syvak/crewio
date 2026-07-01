@@ -5,12 +5,14 @@ import { useAppStore } from '@/store';
 
 export function AppLayout() {
   const isOnline = useAppStore((s) => s.isOnline);
+  const apiUnreachable = useAppStore((s) => s.apiUnreachable);
+  const showOffline = !isOnline || apiUnreachable;
 
   return (
     <div className="mx-auto min-h-full max-w-lg bg-[var(--tg-bg)]">
-      {!isOnline && (
-        <div className="bg-[var(--crew-red)] px-4 py-2 text-center text-sm text-white">
-          Немає з'єднання з інтернетом
+      {showOffline && (
+        <div className="bg-[var(--crew-burgundy-dark)] px-4 py-2 text-center text-sm text-white">
+          Немає з&apos;єднання з сервером
         </div>
       )}
       <Outlet />
