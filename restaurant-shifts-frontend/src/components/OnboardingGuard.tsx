@@ -1,8 +1,10 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/store';
 import {
+  effectiveOnboardingRole,
   needsProfileSetup,
   needsVenueSetup,
+  useOnboardingStore,
 } from '@/store/onboarding';
 
 /** Blocks main app until profile + venue setup is done. */
@@ -12,17 +14,20 @@ export function OnboardingGuard() {
   const employee = useAuthStore((s) => s.employee);
   const contextLoaded = useAuthStore((s) => s.contextLoaded);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const profileSubmitted = useOnboardingStore((s) => s.profileSubmitted);
+  const selectedRole = useOnboardingStore((s) => s.selectedRole);
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/splash" replace />;
   }
 
-  if (needsProfileSetup(user)) {
+  if (needsProfileSetup(user, profileSubmitted)) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (needsVenueSetup(user, restaurant, employee, contextLoaded)) {
-    if (user.role === 'employee') {
+  if (needsVenueSetup(user, restaurant, employee, contextLoaded, profileSubmitted)) {
+    const role = effectiveOnboardingRole(user, selectedRole, profileSubmitted);
+    if (role === 'employee') {
       return <Navigate to="/onboarding/join" replace />;
     }
     return <Navigate to="/onboarding/create-restaurant" replace />;
@@ -38,14 +43,15 @@ export function OnboardingOnlyGuard() {
   const employee = useAuthStore((s) => s.employee);
   const contextLoaded = useAuthStore((s) => s.contextLoaded);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const profileSubmitted = useOnboardingStore((s) => s.profileSubmitted);
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/splash" replace />;
   }
 
   if (
-    user.is_profile_completed &&
-    !needsVenueSetup(user, restaurant, employee, contextLoaded)
+    !needsProfileSetup(user, profileSubmitted) &&
+    !needsVenueSetup(user, restaurant, employee, contextLoaded, profileSubmitted)
   ) {
     return <Navigate to="/" replace />;
   }

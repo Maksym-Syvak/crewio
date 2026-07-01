@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
-import { useOnboardingStore } from '@/store/onboarding';
-import { useToastStore } from '@/store';
-import { getErrorMessage } from '@/api/client';
+import {
+  ONBOARDING_PATHS,
+  ROLE_LABELS,
+  useOnboardingStore,
+} from '@/store/onboarding';
 
 const schema = z.object({
   first_name: z.string().min(1, "Вкажіть ім'я"),
@@ -19,42 +22,52 @@ type FormData = z.infer<typeof schema>;
 export default function CompleteProfilePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const completeProfile = useAuthStore((s) => s.completeProfile);
+  const profileData = useOnboardingStore((s) => s.profileData);
   const selectedRole = useOnboardingStore((s) => s.selectedRole);
-  const push = useToastStore((s) => s.push);
+  const setProfileData = useOnboardingStore((s) => s.setProfileData);
+  const markProfileSubmitted = useOnboardingStore((s) => s.markProfileSubmitted);
+  const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
 
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      first_name: user?.first_name ?? '',
-      last_name: user?.last_name ?? '',
-      phone: user?.phone ?? '',
+      first_name: profileData?.first_name ?? user?.first_name ?? '',
+      last_name: profileData?.last_name ?? user?.last_name ?? '',
+      phone: profileData?.phone ?? user?.phone ?? '',
     },
   });
 
+  useEffect(() => {
+    reset({
+      first_name: profileData?.first_name ?? user?.first_name ?? '',
+      last_name: profileData?.last_name ?? user?.last_name ?? '',
+      phone: profileData?.phone ?? user?.phone ?? '',
+    });
+  }, [profileData, user, reset]);
+
   const onSubmit = async (data: FormData) => {
     if (!selectedRole) {
-      navigate('/onboarding/role');
+      navigate(ONBOARDING_PATHS.role);
       return;
     }
-    try {
-      await completeProfile({
-        ...data,
-        role: selectedRole,
-      });
-      if (selectedRole === 'employee') {
-        navigate('/onboarding/join');
-      } else {
-        navigate('/onboarding/create-restaurant');
-      }
-    } catch (e) {
-      push({ type: 'error', title: getErrorMessage(e) });
+    setProfileData(data);
+    markProfileSubmitted();
+
+    if (selectedRole === 'employee') {
+      setCurrentStep('join');
+      navigate(ONBOARDING_PATHS.join);
+    } else {
+      setCurrentStep('create');
+      navigate(ONBOARDING_PATHS.create);
     }
   };
+
+  const roleInfo = selectedRole ? ROLE_LABELS[selectedRole] : null;
 
   return (
     <div className="page !pb-6">
@@ -62,6 +75,24 @@ export default function CompleteProfilePage() {
       <p className="mb-4 text-sm text-[var(--tg-hint)]">
         Заповніть контактну інформацію для профілю
       </p>
+
+      {roleInfo && (
+        <div className="card mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs text-[var(--tg-hint)]">Поточна роль</p>
+            <p className="font-medium">
+              {roleInfo.icon} {roleInfo.title}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="text-sm text-[var(--tg-link)]"
+            onClick={() => navigate(ONBOARDING_PATHS.role)}
+          >
+            Змінити роль
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Field label="Ім'я" error={errors.first_name?.message}>

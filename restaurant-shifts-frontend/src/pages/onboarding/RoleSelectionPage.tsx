@@ -1,5 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { useOnboardingStore } from '@/store/onboarding';
+import {
+  ONBOARDING_PATHS,
+  useOnboardingStore,
+} from '@/store/onboarding';
 import type { UserRole } from '@/types';
 import { cn } from '@/utils/cn';
 
@@ -37,10 +40,12 @@ export default function RoleSelectionPage() {
   const navigate = useNavigate();
   const selectedRole = useOnboardingStore((s) => s.selectedRole);
   const setSelectedRole = useOnboardingStore((s) => s.setSelectedRole);
+  const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
 
   const continueNext = () => {
     if (!selectedRole) return;
-    navigate('/onboarding/profile');
+    setCurrentStep('profile');
+    navigate(ONBOARDING_PATHS.profile);
   };
 
   return (

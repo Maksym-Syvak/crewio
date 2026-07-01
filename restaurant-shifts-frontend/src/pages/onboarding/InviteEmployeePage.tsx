@@ -4,12 +4,14 @@ import { useAuthStore, useToastStore } from '@/store';
 import { restaurantsApi } from '@/api/restaurants.api';
 import { getErrorMessage } from '@/api/client';
 import { RESTAURANT_TYPE_LABELS } from '@/utils/restaurant-types';
+import { useOnboardingStore } from '@/store/onboarding';
 
 export default function InviteEmployeePage() {
   const navigate = useNavigate();
   const restaurant = useAuthStore((s) => s.restaurant);
   const invitation = useAuthStore((s) => s.activeInvitation);
   const refreshInvite = useAuthStore((s) => s.refreshInvite);
+  const resetOnboarding = useOnboardingStore((s) => s.reset);
   const push = useToastStore((s) => s.push);
 
   useEffect(() => {
@@ -84,7 +86,10 @@ export default function InviteEmployeePage() {
       <button
         type="button"
         className="btn-primary mt-6"
-        onClick={() => navigate('/', { replace: true })}
+        onClick={() => {
+          resetOnboarding();
+          navigate('/', { replace: true });
+        }}
       >
         Перейти до застосунку
       </button>

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
@@ -130,10 +130,6 @@ export class AuthService {
   async completeProfile(userId: string, dto: CompleteProfileDto) {
     const user = await this.usersService.findById(userId);
     if (!user) throw new UnauthorizedException('User not found');
-
-    if (user.is_profile_completed) {
-      throw new BadRequestException('Профіль вже заповнено');
-    }
 
     const updated = await this.usersService.update(userId, {
       first_name: dto.first_name,

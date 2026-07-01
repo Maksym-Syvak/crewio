@@ -1,19 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useToastStore } from '@/store';
 import { inviteApi } from '@/api/restaurants.api';
 import { getErrorMessage } from '@/api/client';
 import { RESTAURANT_TYPE_LABELS } from '@/utils/restaurant-types';
+import {
+  ensureOnboardingProfileComplete,
+  ONBOARDING_PATHS,
+  useOnboardingStore,
+} from '@/store/onboarding';
 import type { InvitePreview } from '@/types';
 
 export default function JoinRestaurantPage() {
   const navigate = useNavigate();
   const joinWithInvite = useAuthStore((s) => s.joinWithInvite);
   const push = useToastStore((s) => s.push);
-  const [code, setCode] = useState('');
+  const inviteCode = useOnboardingStore((s) => s.inviteCode);
+  const setInviteCode = useOnboardingStore((s) => s.setInviteCode);
+  const resetOnboarding = useOnboardingStore((s) => s.reset);
+  const [code, setCode] = useState(inviteCode);
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [checking, setChecking] = useState(false);
   const [joining, setJoining] = useState(false);
+
+  useEffect(() => {
+    setCode(inviteCode);
+  }, [inviteCode]);
+
+  useEffect(() => {
+    setInviteCode(code);
+  }, [code, setInviteCode]);
 
   const handleCheck = async () => {
     if (!code.trim()) return;
@@ -33,11 +49,17 @@ export default function JoinRestaurantPage() {
     if (!code.trim()) return;
     setJoining(true);
     try {
+      await ensureOnboardingProfileComplete();
       await joinWithInvite(code.trim());
       push({ type: 'success', title: 'Ви приєднались до закладу!' });
+      resetOnboarding();
       navigate('/', { replace: true });
     } catch (e) {
-      push({ type: 'error', title: getErrorMessage(e) });
+      const message = getErrorMessage(e);
+      if (message.includes('профіль')) {
+        navigate(ONBOARDING_PATHS.profile);
+      }
+      push({ type: 'error', title: message });
     } finally {
       setJoining(false);
     }

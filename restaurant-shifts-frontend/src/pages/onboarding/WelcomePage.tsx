@@ -1,7 +1,16 @@
 import { useNavigate } from 'react-router-dom';
+import { useOnboardingNavigation } from '@/hooks/useOnboardingNavigation';
+import { ONBOARDING_PATHS, useOnboardingStore } from '@/store/onboarding';
 
 export default function WelcomePage() {
   const navigate = useNavigate();
+  const { cancelRegistration } = useOnboardingNavigation();
+  const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
+
+  const handleStart = () => {
+    setCurrentStep('role');
+    navigate(ONBOARDING_PATHS.role);
+  };
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-8 p-6 text-center">
@@ -17,9 +26,18 @@ export default function WelcomePage() {
           команди закладу
         </p>
       </div>
-      <button type="button" className="btn-primary max-w-xs" onClick={() => navigate('/onboarding/role')}>
-        Почати
-      </button>
+      <div className="flex w-full max-w-xs flex-col gap-3">
+        <button type="button" className="btn-primary" onClick={handleStart}>
+          Почати
+        </button>
+        <button
+          type="button"
+          className="text-sm text-[var(--tg-hint)] underline-offset-2 hover:underline"
+          onClick={cancelRegistration}
+        >
+          Скасувати реєстрацію
+        </button>
+      </div>
     </div>
   );
 }

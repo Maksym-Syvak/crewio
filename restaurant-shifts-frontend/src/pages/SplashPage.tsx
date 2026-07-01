@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
 import { isTelegramEnv } from '@/services/telegram';
-import { needsProfileSetup } from '@/store/onboarding';
+import { getPostLoginPath } from '@/store/onboarding';
 
 export default function SplashPage() {
   const navigate = useNavigate();
@@ -15,9 +15,7 @@ export default function SplashPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(needsProfileSetup(useAuthStore.getState().user) ? '/onboarding' : '/', {
-        replace: true,
-      });
+      navigate(getPostLoginPath(), { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -25,16 +23,14 @@ export default function SplashPage() {
     if (!isTelegramEnv()) return;
     login()
       .then(() => {
-        const user = useAuthStore.getState().user;
-        navigate(needsProfileSetup(user) ? '/onboarding' : '/', { replace: true });
+        navigate(getPostLoginPath(), { replace: true });
       })
       .catch(() => undefined);
   }, [login, navigate]);
 
   const handleDevLogin = async () => {
     await devLogin(devId);
-    const user = useAuthStore.getState().user;
-    navigate(needsProfileSetup(user) ? '/onboarding' : '/', { replace: true });
+    navigate(getPostLoginPath(), { replace: true });
   };
 
   return (

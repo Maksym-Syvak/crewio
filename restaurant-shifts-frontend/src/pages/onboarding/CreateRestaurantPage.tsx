@@ -1,10 +1,16 @@
 import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useToastStore } from '@/store';
 import { getErrorMessage } from '@/api/client';
+import {
+  ensureOnboardingProfileComplete,
+  ONBOARDING_PATHS,
+  useOnboardingStore,
+} from '@/store/onboarding';
 import {
   RESTAURANT_TYPES,
   RESTAURANT_TYPE_LABELS,
@@ -41,23 +47,54 @@ export default function CreateRestaurantPage() {
   const navigate = useNavigate();
   const createRestaurant = useAuthStore((s) => s.createRestaurant);
   const push = useToastStore((s) => s.push);
+  const restaurantData = useOnboardingStore((s) => s.restaurantData);
+  const setRestaurantData = useOnboardingStore((s) => s.setRestaurantData);
+  const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
 
   const {
     register,
     handleSubmit,
+    watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { country: 'Україна', employees_limit: 10 },
+    defaultValues: {
+      country: 'Україна',
+      employees_limit: 10,
+      ...restaurantData,
+    },
   });
+
+  useEffect(() => {
+    reset({
+      country: 'Україна',
+      employees_limit: 10,
+      ...restaurantData,
+    });
+  }, [restaurantData, reset]);
+
+  useEffect(() => {
+    const sub = watch((values) => {
+      setRestaurantData(values);
+    });
+    return () => sub.unsubscribe();
+  }, [watch, setRestaurantData]);
 
   const onSubmit = async (data: FormData) => {
     try {
+      await ensureOnboardingProfileComplete();
       await createRestaurant(data);
+      setRestaurantData(data);
+      setCurrentStep('invite');
       push({ type: 'success', title: 'Заклад створено!' });
-      navigate('/onboarding/invite');
+      navigate(ONBOARDING_PATHS.invite);
     } catch (e) {
-      push({ type: 'error', title: getErrorMessage(e) });
+      const message = getErrorMessage(e);
+      if (message.includes('профіль')) {
+        navigate(ONBOARDING_PATHS.profile);
+      }
+      push({ type: 'error', title: message });
     }
   };
 
