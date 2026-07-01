@@ -15,7 +15,7 @@ export function RouteGuard({ children, roles, adminOnly }: Props) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   if (!isAuthenticated || !user) {
-    return <Navigate to="/splash" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (adminOnly && !isAdminRole(user.role)) {

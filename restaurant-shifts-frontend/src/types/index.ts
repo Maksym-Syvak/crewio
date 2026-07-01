@@ -57,6 +57,7 @@ export interface User {
   photo_url?: string;
   role: UserRole;
   is_profile_completed: boolean;
+  has_password?: boolean;
   created_at: string;
 }
 

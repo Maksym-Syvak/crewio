@@ -1,10 +1,16 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/entities/user.entity';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { LoginPasswordDto } from './dto/login-password.dto';
+import { toPublicUser } from '../../common/utils/user-response';
 
 interface TelegramAuthData {
   id: number;
@@ -22,10 +28,6 @@ export class AuthService {
     private readonly usersService: UsersService,
   ) {}
 
-  /**
-   * Validates the `initData` string Telegram Mini Apps provide on launch.
-   * See: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
-   */
   verifyInitData(initData: string): TelegramAuthData {
     const botToken = this.config.get<string>('TELEGRAM_BOT_TOKEN');
     if (!botToken) {
@@ -67,13 +69,29 @@ export class AuthService {
     return JSON.parse(userJson) as TelegramAuthData;
   }
 
+  private signToken(user: { id: string; telegram_id: string; role: UserRole }) {
+    return this.jwtService.signAsync({
+      sub: user.id,
+      telegram_id: user.telegram_id,
+      role: user.role,
+    });
+  }
+
+  private async buildAuthResponse(user: Awaited<ReturnType<UsersService['findById']>>) {
+    if (!user) throw new UnauthorizedException('User not found');
+    const accessToken = await this.signToken(user);
+    const withPassword = await this.usersService.findByIdWithPassword(user.id);
+    return {
+      accessToken,
+      user: toPublicUser(user, withPassword?.password_hash),
+    };
+  }
+
   async loginWithInitData(initData: string) {
     const telegramUser = this.verifyInitData(initData);
 
     let user = await this.usersService.findByTelegramId(String(telegramUser.id));
     if (!user) {
-      // First-time login: default role is employee. Owners typically
-      // upgrade their own role when they create a restaurant.
       user = await this.usersService.create({
         telegram_id: String(telegramUser.id),
         username: telegramUser.username,
@@ -83,18 +101,31 @@ export class AuthService {
         role: UserRole.EMPLOYEE,
         is_profile_completed: false,
       });
+    } else {
+      await this.usersService.update(user.id, {
+        username: telegramUser.username ?? user.username,
+        photo_url: telegramUser.photo_url ?? user.photo_url,
+      });
+      user = (await this.usersService.findById(user.id))!;
     }
 
-    const accessToken = await this.jwtService.signAsync({
-      sub: user.id,
-      telegram_id: user.telegram_id,
-      role: user.role,
-    });
-
-    return { accessToken, user };
+    return this.buildAuthResponse(user);
   }
 
-  /** Development-only login without Telegram Mini App (NODE_ENV !== production). */
+  async loginWithPassword(dto: LoginPasswordDto) {
+    const user = await this.usersService.findByLogin(dto.login);
+    if (!user?.password_hash) {
+      throw new UnauthorizedException('Невірний логін або пароль');
+    }
+
+    const valid = await this.usersService.verifyPassword(dto.password, user.password_hash);
+    if (!valid) {
+      throw new UnauthorizedException('Невірний логін або пароль');
+    }
+
+    return this.buildAuthResponse(user);
+  }
+
   async devLogin(telegramId: string, firstName = 'Dev User') {
     if (this.config.get<string>('NODE_ENV') === 'production') {
       throw new UnauthorizedException('Dev login is disabled in production');
@@ -110,36 +141,37 @@ export class AuthService {
       });
     }
 
-    const accessToken = await this.jwtService.signAsync({
-      sub: user.id,
-      telegram_id: user.telegram_id,
-      role: user.role,
-    });
-
-    return { accessToken, user };
-  }
-
-  private signToken(user: { id: string; telegram_id: string; role: UserRole }) {
-    return this.jwtService.signAsync({
-      sub: user.id,
-      telegram_id: user.telegram_id,
-      role: user.role,
-    });
+    return this.buildAuthResponse(user);
   }
 
   async completeProfile(userId: string, dto: CompleteProfileDto) {
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findByIdWithPassword(userId);
     if (!user) throw new UnauthorizedException('User not found');
 
-    const updated = await this.usersService.update(userId, {
+    const needsPassword = !user.password_hash;
+    if (needsPassword) {
+      if (!dto.password || !dto.password_confirm) {
+        throw new BadRequestException('Створіть пароль для входу');
+      }
+      if (dto.password !== dto.password_confirm) {
+        throw new BadRequestException('Паролі не співпадають');
+      }
+    }
+
+    const update: Partial<typeof user> = {
       first_name: dto.first_name,
       last_name: dto.last_name,
       phone: dto.phone,
       role: dto.role,
       is_profile_completed: true,
-    });
+    };
 
-    const accessToken = await this.signToken(updated!);
-    return { accessToken, user: updated };
+    if (dto.password) {
+      update.password_hash = await this.usersService.hashPassword(dto.password);
+    }
+
+    await this.usersService.update(userId, update);
+    const updated = await this.usersService.findById(userId);
+    return this.buildAuthResponse(updated);
   }
 }

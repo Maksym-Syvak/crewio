@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { UserRole } from '../../users/entities/user.entity';
 
 export class CompleteProfileDto {
@@ -16,4 +16,16 @@ export class CompleteProfileDto {
 
   @IsEnum(UserRole)
   role: UserRole;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  @MaxLength(64)
+  password?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  @MaxLength(64)
+  password_confirm?: string;
 }

@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -43,14 +44,21 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.EMPLOYEE })
   role: UserRole;
 
+  @Column({ nullable: true, select: false })
+  password_hash: string;
+
+  @Column({ default: false })
+  is_deleted: boolean;
+
+  @DeleteDateColumn({ nullable: true })
+  deleted_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 
-  // A user can own multiple restaurants
   @OneToMany(() => Restaurant, (restaurant) => restaurant.owner)
   restaurants: Restaurant[];
 
-  // A user can be staff at multiple restaurants (via Employee join entity)
   @OneToMany(() => Employee, (employee) => employee.user)
   employments: Employee[];
 }

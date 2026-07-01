@@ -18,7 +18,7 @@ export function OnboardingGuard() {
   const selectedRole = useOnboardingStore((s) => s.selectedRole);
 
   if (!isAuthenticated || !user) {
-    return <Navigate to="/splash" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (needsProfileSetup(user, profileSubmitted)) {
@@ -46,7 +46,7 @@ export function OnboardingOnlyGuard() {
   const profileSubmitted = useOnboardingStore((s) => s.profileSubmitted);
 
   if (!isAuthenticated || !user) {
-    return <Navigate to="/splash" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (

@@ -15,7 +15,6 @@ import { employeesApi } from '@/api/employees.api';
 import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
 import { getErrorMessage, withRetry } from '@/api/client';
-import { clearLoggedOut } from '@/utils/session';
 
 interface AuthState {
   user: User | null;
@@ -28,6 +27,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: () => Promise<void>;
+  loginWithPassword: (login: string, password: string) => Promise<void>;
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
   loadContext: () => Promise<void>;
@@ -63,8 +63,21 @@ export const useAuthStore = create<AuthState>()(
           const { accessToken, user } = await withRetry(() =>
             authApi.login(initData),
           );
-          set({ token: accessToken, user, isAuthenticated: true });
-          clearLoggedOut();
+          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          await get().loadContext().catch(() => undefined);
+        } catch (e) {
+          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          throw e;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      loginWithPassword: async (login, password) => {
+        set({ isLoading: true, error: null });
+        try {
+          const { accessToken, user } = await authApi.loginPassword(login, password);
+          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
           await get().loadContext().catch(() => undefined);
         } catch (e) {
           set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
@@ -81,8 +94,7 @@ export const useAuthStore = create<AuthState>()(
             telegramId,
             'Dev User',
           );
-          set({ token: accessToken, user, isAuthenticated: true });
-          clearLoggedOut();
+          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
           await get().loadContext().catch(() => undefined);
         } catch (e) {
           set({ error: getErrorMessage(e) });

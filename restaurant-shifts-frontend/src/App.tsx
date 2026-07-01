@@ -11,6 +11,7 @@ import { useAuthStore, useAppStore } from '@/store';
 import { connectSocket, disconnectSocket } from '@/sockets/events';
 import { initTelegramApp } from '@/services/telegram';
 import SplashPage from '@/pages/SplashPage';
+import LoginPage from '@/pages/LoginPage';
 
 const HomePage = lazy(() => import('@/pages/HomePage'));
 const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
@@ -85,6 +86,7 @@ function AppBootstrap() {
     <Suspense fallback={<PageSkeleton />}>
       <Routes>
         <Route path="/splash" element={<SplashPage />} />
+        <Route path="/login" element={<LoginPage />} />
 
         <Route
           element={
@@ -154,7 +156,7 @@ function AppBootstrap() {
             isAuthenticated ? (
               <Navigate to="/404" replace />
             ) : (
-              <Navigate to="/splash" replace />
+              <Navigate to="/login" replace />
             )
           }
         />

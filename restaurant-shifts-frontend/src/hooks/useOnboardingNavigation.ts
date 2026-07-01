@@ -13,7 +13,6 @@ export function useOnboardingNavigation() {
   const backPath = getBackPath(pathname);
   const step = pathToStep(pathname);
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
-  const reset = useOnboardingStore((s) => s.reset);
 
   useEffect(() => {
     setCurrentStep(step);
@@ -25,10 +24,9 @@ export function useOnboardingNavigation() {
   }, [backPath, navigate]);
 
   const cancelRegistration = useCallback(async () => {
-    reset();
     await clearAppSession();
-    navigate('/splash', { replace: true });
-  }, [reset, navigate]);
+    navigate('/login', { replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;

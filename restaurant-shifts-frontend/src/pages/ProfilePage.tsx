@@ -1,41 +1,55 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '@/store';
+import { useAuthStore, useToastStore } from '@/store';
 import { ROLE_LABELS, canManageStaff } from '@/utils/roles';
 import { LogoutModal } from '@/components/LogoutModal';
+import { DeleteAccountModal } from '@/components/DeleteAccountModal';
+import { ChangePasswordModal } from '@/components/ChangePasswordModal';
 import { clearAppSession } from '@/utils/session';
 import { ONBOARDING_PATHS } from '@/store/onboarding';
+import { usersApi } from '@/api/users.api';
+import { getErrorMessage } from '@/api/client';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const setUser = (u: typeof user) => useAuthStore.setState({ user: u });
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
+  const push = useToastStore((s) => s.push);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   const handleLogoutConfirm = async () => {
     setLogoutLoading(true);
     try {
       await clearAppSession();
-      navigate('/splash', { replace: true });
+      navigate('/login', { replace: true });
     } finally {
       setLogoutLoading(false);
       setLogoutOpen(false);
     }
   };
 
-  const openStatistics = () => {
-    navigate('/statistics');
+  const handleDeleteConfirm = async (confirmDeleteRestaurant?: boolean) => {
+    setDeleteLoading(true);
+    try {
+      await usersApi.deleteMe(confirmDeleteRestaurant);
+      await clearAppSession();
+      push({ type: 'success', title: 'Акаунт видалено' });
+      navigate('/login', { replace: true });
+    } catch (e) {
+      push({ type: 'error', title: getErrorMessage(e) });
+    } finally {
+      setDeleteLoading(false);
+      setDeleteOpen(false);
+    }
   };
 
-  const openStaff = () => {
-    navigate('/staff');
-  };
-
-  const openJoin = () => {
-    navigate(ONBOARDING_PATHS.join);
-  };
+  const openJoin = () => navigate(ONBOARDING_PATHS.join);
 
   const isEmployeeWithoutVenue = user?.role === 'employee' && !employee;
 
@@ -59,9 +73,7 @@ export default function ProfilePage() {
         <p className="text-sm text-[var(--tg-hint)]">
           {user ? ROLE_LABELS[user.role] : ''}
         </p>
-        {restaurant && (
-          <p className="mt-1 text-sm">{restaurant.name}</p>
-        )}
+        {restaurant && <p className="mt-1 text-sm">{restaurant.name}</p>}
       </div>
 
       {isEmployeeWithoutVenue && (
@@ -84,25 +96,53 @@ export default function ProfilePage() {
 
       <div className="mt-6 space-y-2 pb-4">
         {!isEmployeeWithoutVenue && (
-          <button type="button" className="btn-secondary" onClick={openStatistics}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => navigate('/statistics')}
+          >
             Статистика
           </button>
         )}
         {user && canManageStaff(user.role) && (
-          <button type="button" className="btn-secondary" onClick={openStaff}>
+          <button type="button" className="btn-secondary" onClick={() => navigate('/staff')}>
             Персонал
           </button>
         )}
+        <button type="button" className="btn-secondary" onClick={() => setPasswordOpen(true)}>
+          {user?.has_password ? 'Змінити пароль' : 'Створити пароль'}
+        </button>
         <button type="button" className="btn-danger" onClick={() => setLogoutOpen(true)}>
           Вийти
         </button>
       </div>
+
+      <button
+        type="button"
+        className="mt-8 w-full text-center text-xs text-[var(--crew-crimson)] underline-offset-2 hover:underline"
+        onClick={() => setDeleteOpen(true)}
+      >
+        Видалити акаунт
+      </button>
 
       <LogoutModal
         open={logoutOpen}
         loading={logoutLoading}
         onCancel={() => setLogoutOpen(false)}
         onConfirm={handleLogoutConfirm}
+      />
+      <DeleteAccountModal
+        open={deleteOpen}
+        role={user?.role ?? null}
+        loading={deleteLoading}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteConfirm}
+      />
+      <ChangePasswordModal
+        open={passwordOpen}
+        hasPassword={Boolean(user?.has_password)}
+        onClose={() => setPasswordOpen(false)}
+        onSuccess={(updated) => setUser(updated)}
       />
     </div>
   );

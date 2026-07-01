@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { LoginPasswordDto } from './dto/login-password.dto';
 import { DevLoginDto } from './dto/dev-login.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -11,10 +12,14 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // POST /auth/login — verifies Telegram initData and returns a JWT
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.loginWithInitData(dto.initData);
+  }
+
+  @Post('login-password')
+  loginPassword(@Body() dto: LoginPasswordDto) {
+    return this.authService.loginWithPassword(dto);
   }
 
   @Post('dev-login')
@@ -22,7 +27,6 @@ export class AuthController {
     return this.authService.devLogin(dto.telegram_id, dto.first_name);
   }
 
-  // Example of a protected route; returns the decoded JWT payload
   @UseGuards(JwtAuthGuard)
   @Post('complete-profile')
   completeProfile(@Req() req: { user: { sub: string } }, @Body() dto: CompleteProfileDto) {
