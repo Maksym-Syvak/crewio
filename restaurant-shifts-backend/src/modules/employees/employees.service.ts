@@ -12,6 +12,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { toPaginatedResult } from '../../common/dto/pagination-query.dto';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StatisticsService } from '../statistics/statistics.service';
+import { PositionsService } from '../positions/positions.service';
 import { ShiftBooking, ShiftBookingStatus } from '../shifts/entities/shift-booking.entity';
 import { Statistics } from '../statistics/entities/statistics.entity';
 import { Position } from '../positions/entities/position.entity';
@@ -45,6 +46,7 @@ export class EmployeesService {
     private readonly positionsRepo: Repository<Position>,
     private readonly restaurantsService: RestaurantsService,
     private readonly statisticsService: StatisticsService,
+    private readonly positionsService: PositionsService,
   ) {}
 
   async findByUserAndRestaurant(userId: string, restaurantId: string) {
@@ -285,9 +287,24 @@ export class EmployeesService {
       .orderBy('shift.start_time', 'ASC')
       .getOne();
 
+    let positions = await this.positionsRepo.find({
+      where: { restaurant_id: employee.restaurant_id },
+      order: { name: 'ASC' },
+    });
+    if (positions.length === 0) {
+      await this.positionsService.createDefaultsForRestaurant(
+        employee.restaurant_id,
+      );
+      positions = await this.positionsRepo.find({
+        where: { restaurant_id: employee.restaurant_id },
+        order: { name: 'ASC' },
+      });
+    }
+
     return {
       employee,
       stats,
+      positions,
       next_shift: nextBooking
         ? {
             id: nextBooking.shift.id,

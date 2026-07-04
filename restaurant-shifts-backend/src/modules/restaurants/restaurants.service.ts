@@ -5,6 +5,7 @@ import { Restaurant } from './entities/restaurant.entity';
 import { CreateRestaurantDto, ImportRestaurantFromGoogleDto } from './dto/create-restaurant.dto';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { GooglePlacesService } from './google-places.service';
+import { PositionsService } from '../positions/positions.service';
 
 @Injectable()
 export class RestaurantsService {
@@ -12,6 +13,7 @@ export class RestaurantsService {
     @InjectRepository(Restaurant)
     private readonly restaurantsRepo: Repository<Restaurant>,
     private readonly googlePlaces: GooglePlacesService,
+    private readonly positionsService: PositionsService,
   ) {}
 
   findAll(ownerId?: string) {
@@ -30,7 +32,7 @@ export class RestaurantsService {
     return restaurant;
   }
 
-  create(ownerId: string, dto: CreateRestaurantDto) {
+  async create(ownerId: string, dto: CreateRestaurantDto) {
     const working_hours =
       dto.working_hours ??
       (dto.open_time && dto.close_time
@@ -54,7 +56,9 @@ export class RestaurantsService {
       staff_count: dto.staff_count ?? dto.employees_limit ?? 0,
       owner_id: ownerId,
     });
-    return this.restaurantsRepo.save(restaurant);
+    const saved = await this.restaurantsRepo.save(restaurant);
+    await this.positionsService.createDefaultsForRestaurant(saved.id);
+    return saved;
   }
 
   // Variant 2: pull details from Google Places instead of manual entry
@@ -70,7 +74,9 @@ export class RestaurantsService {
       working_hours: details.workingHours,
       photo_url: details.photoUrl,
     });
-    return this.restaurantsRepo.save(restaurant);
+    const saved = await this.restaurantsRepo.save(restaurant);
+    await this.positionsService.createDefaultsForRestaurant(saved.id);
+    return saved;
   }
 
   async update(id: string, dto: UpdateRestaurantDto) {

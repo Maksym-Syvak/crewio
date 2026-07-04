@@ -153,6 +153,7 @@ export interface EmployeeSummary {
 export interface EmployeeProfile {
   employee: Employee;
   stats: Statistics;
+  positions: Position[];
   next_shift: {
     id: string;
     start_time: string;

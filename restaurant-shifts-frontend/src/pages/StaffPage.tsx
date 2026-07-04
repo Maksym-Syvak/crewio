@@ -131,7 +131,7 @@ function EmployeeCard({ employee }: { employee: Employee }) {
   const user = employee.user;
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ');
   const phone = formatEmployeePhone(employee.phone, user?.phone);
-  const position = employee.position?.name ?? 'Без посади';
+  const position = employee.position?.name ?? 'Не обрано';
   const statusLabel = getEmployeeStatusLabel(employee.status);
   const active = isEmployeeActive(employee.status);
   const telegram = telegramDisplayName(user?.username);

@@ -17,10 +17,13 @@ import {
 import { canManageStaff } from '@/utils/roles';
 import { getErrorMessage } from '@/api/client';
 
+function formatPositionLabel(position?: { name?: string } | null) {
+  return position?.name ?? 'Не обрано';
+}
+
 export default function EmployeeProfilePage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
-  const restaurant = useAuthStore((s) => s.restaurant);
   const workspaceRole = useAuthStore((s) => s.workspaceRole);
   const push = useToastStore((s) => s.push);
   const [profile, setProfile] = useState<EmployeeProfile | null>(null);
@@ -29,6 +32,7 @@ export default function EmployeeProfilePage() {
   const [saving, setSaving] = useState(false);
   const [creatingPosition, setCreatingPosition] = useState(false);
   const [newPositionName, setNewPositionName] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = canManageStaff(workspaceRole);
@@ -43,7 +47,10 @@ export default function EmployeeProfilePage() {
     employeesApi
       .profile(employeeId)
       .then((data) => {
-        if (!cancelled) setProfile(data);
+        if (cancelled) return;
+        setProfile(data);
+        setPositions(data.positions ?? []);
+        setShowCreateForm((data.positions ?? []).length === 0);
       })
       .catch(() => {
         if (!cancelled) setError('Не вдалося завантажити профіль співробітника');
@@ -57,21 +64,22 @@ export default function EmployeeProfilePage() {
     };
   }, [employeeId]);
 
-  useEffect(() => {
-    if (!restaurant || !canEdit) return;
-    positionsApi.list(restaurant.id).then(setPositions).catch(() => setPositions([]));
-  }, [restaurant, canEdit]);
-
   const handlePositionChange = async (positionId: string) => {
     if (!employeeId || !profile) return;
     setSaving(true);
     try {
+      const selected = positions.find((p) => p.id === positionId);
       const updated = await employeesApi.update(employeeId, {
         position_id: positionId || null,
       });
       setProfile({
         ...profile,
-        employee: { ...profile.employee, ...updated, position: positions.find((p) => p.id === positionId) },
+        employee: {
+          ...profile.employee,
+          ...updated,
+          position: selected,
+          position_id: positionId || undefined,
+        },
       });
       push({ type: 'success', title: 'Посаду оновлено' });
     } catch (e) {
@@ -82,16 +90,38 @@ export default function EmployeeProfilePage() {
   };
 
   const handleCreatePosition = async () => {
-    if (!restaurant || !newPositionName.trim()) return;
+    const restaurantId = profile?.employee.restaurant_id;
+    if (!restaurantId || !newPositionName.trim()) return;
+
     setCreatingPosition(true);
     try {
       const created = await positionsApi.create({
-        restaurant_id: restaurant.id,
+        restaurant_id: restaurantId,
         name: newPositionName.trim(),
       });
-      setPositions((prev) => [...prev, created]);
+      setPositions((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name, 'uk')),
+      );
       setNewPositionName('');
-      await handlePositionChange(created.id);
+      setShowCreateForm(false);
+
+      const updated = await employeesApi.update(employeeId!, {
+        position_id: created.id,
+      });
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              employee: {
+                ...prev.employee,
+                ...updated,
+                position: created,
+                position_id: created.id,
+              },
+            }
+          : prev,
+      );
+      push({ type: 'success', title: 'Посаду створено та призначено' });
     } catch (e) {
       push({ type: 'error', title: getErrorMessage(e) });
     } finally {
@@ -122,13 +152,14 @@ export default function EmployeeProfilePage() {
   const user = employee.user;
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ');
   const phone = formatEmployeePhone(employee.phone, user?.phone);
-  const positionName = employee.position?.name ?? 'Без посади';
+  const positionName = formatPositionLabel(employee.position);
   const statusLabel = getEmployeeStatusLabel(employee.status);
   const active = isEmployeeActive(employee.status);
   const telegram = telegramDisplayName(user?.username);
   const telegramUrl = telegramProfileUrl(user?.username);
   const month = formatMonth();
   const bookedShifts = stats.booked_shifts ?? stats.worked_shifts ?? 0;
+  const hasPositions = positions.length > 0;
 
   return (
     <div className="page">
@@ -162,36 +193,60 @@ export default function EmployeeProfilePage() {
       </div>
 
       {canEdit && (
-        <section className="card mt-6 space-y-3">
-          <h2 className="text-sm font-semibold">Посада</h2>
-          <select
-            className="field-input w-full"
-            value={employee.position_id ?? ''}
-            disabled={saving}
-            onChange={(e) => void handlePositionChange(e.target.value)}
-          >
-            <option value="">Без посади</option>
-            {positions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-2">
-            <input
-              className="field-input min-w-0 flex-1"
-              placeholder="Нова посада..."
-              value={newPositionName}
-              onChange={(e) => setNewPositionName(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn-secondary shrink-0"
-              disabled={creatingPosition || !newPositionName.trim()}
-              onClick={() => void handleCreatePosition()}
-            >
-              {creatingPosition ? '...' : 'Створити'}
-            </button>
+        <section className="card mt-6 overflow-hidden">
+          <h2 className="mb-3 text-sm font-semibold">Посада</h2>
+
+          <div className="flex flex-col gap-3">
+            {hasPositions ? (
+              <select
+                className="position-control"
+                value={employee.position_id ?? ''}
+                disabled={saving}
+                onChange={(e) => void handlePositionChange(e.target.value)}
+              >
+                <option value="">Оберіть посаду</option>
+                {positions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-sm text-[var(--tg-hint)]">Посади ще не створені</p>
+            )}
+
+            {(showCreateForm || !hasPositions) && (
+              <div className="position-create-row">
+                <input
+                  className="position-control min-w-0 flex-1"
+                  placeholder="Нова посада"
+                  value={newPositionName}
+                  disabled={creatingPosition}
+                  onChange={(e) => setNewPositionName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleCreatePosition();
+                  }}
+                />
+                <button
+                  type="button"
+                  className="position-create-btn btn-secondary"
+                  disabled={creatingPosition || !newPositionName.trim()}
+                  onClick={() => void handleCreatePosition()}
+                >
+                  {creatingPosition ? '...' : hasPositions ? 'Створити' : 'Створити посаду'}
+                </button>
+              </div>
+            )}
+
+            {hasPositions && !showCreateForm && (
+              <button
+                type="button"
+                className="text-left text-sm text-[var(--tg-link)]"
+                onClick={() => setShowCreateForm(true)}
+              >
+                + Додати нову посаду
+              </button>
+            )}
           </div>
         </section>
       )}
@@ -253,12 +308,48 @@ export default function EmployeeProfilePage() {
       </div>
 
       <style>{`
-        .field-input {
+        .position-control {
+          box-sizing: border-box;
+          display: block;
+          width: 100%;
+          min-width: 0;
+          height: 44px;
           border-radius: 10px;
           background: var(--tg-secondary-bg);
-          padding: 12px;
+          padding: 0 12px;
           border: 1px solid color-mix(in srgb, var(--crew-burgundy) 15%, transparent);
           color: var(--tg-text);
+          font-size: 16px;
+        }
+
+        .position-create-row {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          width: 100%;
+        }
+
+        @media (min-width: 480px) {
+          .position-create-row {
+            flex-direction: row;
+            align-items: stretch;
+          }
+        }
+
+        .position-create-btn {
+          box-sizing: border-box;
+          width: 100%;
+          min-height: 44px;
+          height: 44px;
+          flex-shrink: 0;
+          white-space: nowrap;
+        }
+
+        @media (min-width: 480px) {
+          .position-create-btn {
+            width: auto;
+            min-width: 7.5rem;
+          }
         }
       `}</style>
     </div>

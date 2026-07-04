@@ -6,12 +6,14 @@ import { RestaurantsController } from './restaurants.controller';
 import { GooglePlacesService } from './google-places.service';
 import { InvitationTokensModule } from '../invitation-tokens/invitation-tokens.module';
 import { ShiftsModule } from '../shifts/shifts.module';
+import { PositionsModule } from '../positions/positions.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Restaurant]),
     forwardRef(() => InvitationTokensModule),
     forwardRef(() => ShiftsModule),
+    PositionsModule,
   ],
   controllers: [RestaurantsController],
   providers: [RestaurantsService, GooglePlacesService],
