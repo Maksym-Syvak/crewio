@@ -1,4 +1,4 @@
-import type { PaymentType, Shift, ShiftBooking } from '@/types';
+import type { PaymentType, Shift, ShiftBooking, ShiftStatus } from '@/types';
 import { shiftDurationHours } from '@/utils/dates';
 
 export function getShiftBookings(shift: Shift): ShiftBooking[] {
@@ -27,15 +27,28 @@ export function isEmployeeBooked(shift: Shift, employeeId?: string): boolean {
   );
 }
 
+export function getBookingTimeRange(booking: ShiftBooking, shift: Shift): { start: string; end: string } {
+  if (booking.booking_type === 'partial' && booking.booked_start_time && booking.booked_end_time) {
+    return { start: booking.booked_start_time, end: booking.booked_end_time };
+  }
+  return { start: shift.start_time, end: shift.end_time };
+}
+
+export function getBookingHours(booking: ShiftBooking, shift: Shift): number {
+  const { start, end } = getBookingTimeRange(booking, shift);
+  return shiftDurationHours(start, end);
+}
+
 export function getPlannedHours(shift: Shift): number {
   return shiftDurationHours(shift.start_time, shift.end_time);
 }
 
-export function getActualHours(shift: Shift): number {
-  if (shift.actual_start_time && shift.actual_end_time) {
-    return shiftDurationHours(shift.actual_start_time, shift.actual_end_time);
-  }
-  return getPlannedHours(shift);
+export function isPartialBooking(booking: ShiftBooking): boolean {
+  return booking.booking_type === 'partial';
+}
+
+export function getBookingEmoji(booking: ShiftBooking): string {
+  return isPartialBooking(booking) ? '🟠' : '🟢';
 }
 
 export function getShiftPayLabel(shift: Shift): string | null {
@@ -59,18 +72,17 @@ export function getShiftPayLabel(shift: Shift): string | null {
   }
 }
 
-export function calculateShiftPayPreview(shift: Shift): string | null {
-  const label = getShiftPayLabel(shift);
-  if (!label) return null;
+export function calculateBookingPayPreview(shift: Shift, booking: ShiftBooking): string | null {
+  if (booking.actual_salary != null) return `${booking.actual_salary} ₴`;
 
+  const hours = getBookingHours(booking, shift);
   if (shift.payment_type === 'hourly' && shift.hourly_rate != null) {
-    const hours = getActualHours(shift);
     const total = Math.round(Number(shift.hourly_rate) * hours * 100) / 100;
     return `${total} ₴ (${hours.toFixed(1)} год × ${shift.hourly_rate} ₴)`;
   }
 
   const rate = shift.shift_rate ?? shift.fixed_rate ?? shift.payment_rate;
-  return rate != null ? `${rate} ₴` : label;
+  return rate != null ? `${rate} ₴` : null;
 }
 
 export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
@@ -78,3 +90,25 @@ export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
   hourly: 'Погодинна',
   fixed: 'Фіксована ставка',
 };
+
+export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
+  open: 'Відкрита',
+  partially_filled: 'Частково заповнена',
+  fully_filled: 'Заповнена',
+  urgent: 'Терміново',
+  active: 'Активна',
+  completed: 'Завершена',
+  cancelled: 'Скасована',
+};
+
+export function getShiftStatusLabel(status: ShiftStatus): string {
+  return SHIFT_STATUS_LABELS[status] ?? status;
+}
+
+export function isShiftUrgent(shift: Shift): boolean {
+  return shift.status === 'urgent' || shift.is_urgent;
+}
+
+export function canBookShift(shift: Shift): boolean {
+  return !['active', 'completed', 'cancelled'].includes(shift.status);
+}

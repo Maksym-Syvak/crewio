@@ -52,27 +52,7 @@ export class NotificationsService {
     const user = await this.usersService.findById(dto.user_id);
     if (user) {
       const frontendUrl = this.config.get<string>('FRONTEND_URL');
-      const replyMarkup =
-        dto.metadata?.action === 'view_schedule' && frontendUrl
-          ? {
-              inline_keyboard: [
-                [{ text: 'Переглянути', web_app: { url: `${frontendUrl}/shifts` } }],
-              ],
-            }
-          : dto.metadata?.action === 'view_shift' &&
-              frontendUrl &&
-              dto.related_shift_id
-            ? {
-                inline_keyboard: [
-                  [
-                    {
-                      text: 'Переглянути',
-                      web_app: { url: `${frontendUrl}/shifts/${dto.related_shift_id}` },
-                    },
-                  ],
-                ],
-              }
-            : undefined;
+      const replyMarkup = this.buildReplyMarkup(dto, frontendUrl);
 
       const delivered = await this.telegram.sendMessage(
         user.telegram_id,
@@ -89,6 +69,46 @@ export class NotificationsService {
     return saved;
   }
 
+  private buildReplyMarkup(dto: CreateNotificationDto, frontendUrl?: string) {
+    if (!frontendUrl) return undefined;
+
+    if (dto.metadata?.action === 'view_schedule') {
+      return {
+        inline_keyboard: [
+          [{ text: 'Переглянути', web_app: { url: `${frontendUrl}/shifts` } }],
+        ],
+      };
+    }
+
+    if (dto.metadata?.action === 'book_shift' && dto.related_shift_id) {
+      return {
+        inline_keyboard: [
+          [
+            {
+              text: 'Забронювати',
+              web_app: { url: `${frontendUrl}/shifts/${dto.related_shift_id}` },
+            },
+          ],
+        ],
+      };
+    }
+
+    if (dto.metadata?.action === 'view_shift' && dto.related_shift_id) {
+      return {
+        inline_keyboard: [
+          [
+            {
+              text: 'Переглянути',
+              web_app: { url: `${frontendUrl}/shifts/${dto.related_shift_id}` },
+            },
+          ],
+        ],
+      };
+    }
+
+    return undefined;
+  }
+
   async markRead(id: string) {
     await this.repo.update(id, { status: NotificationStatus.READ });
     return this.repo.findOne({ where: { id } });
@@ -103,6 +123,24 @@ export class NotificationsService {
       if (!employee.user_id) continue;
       await this.create({ user_id: employee.user_id, ...build(employee.user_id) });
     }
+  }
+
+  private buildUrgentBody(shift: any) {
+    const available = getAvailableSlots(shift);
+    return [
+      '',
+      'Заклад:',
+      shift.restaurant?.name ?? '—',
+      '',
+      'Дата:',
+      formatDateShort(shift.start_time),
+      '',
+      'Час:',
+      `${formatTimeHm(shift.start_time)}-${formatTimeHm(shift.end_time)}`,
+      '',
+      'Вільних місць:',
+      String(available),
+    ].join('\n');
   }
 
   @OnEvent('schedule.generated')
@@ -136,28 +174,25 @@ export class NotificationsService {
 
   @OnEvent('shift.emergency')
   async onEmergencyShift(shift: any) {
-    const available = getAvailableSlots(shift);
-    const body = [
-      '',
-      'Дата:',
-      formatDateShort(shift.start_time),
-      '',
-      'Час:',
-      `${formatTimeHm(shift.start_time)}-${formatTimeHm(shift.end_time)}`,
-      '',
-      'Вільно:',
-      `${available} ${available === 1 ? 'місце' : 'місць'}`,
-    ].join('\n');
+    await this.sendUrgentNotification(shift);
+    this.events.emit('ws.emergency_shift', shift);
+  }
+
+  @OnEvent('shift.urgent_reminder')
+  async onUrgentReminder(payload: { shift: any; threshold: number }) {
+    await this.sendUrgentNotification(payload.shift);
+  }
+
+  private async sendUrgentNotification(shift: any) {
+    const body = this.buildUrgentBody(shift);
 
     await this.notifyRestaurantEmployees(shift.restaurant_id, () => ({
       type: NotificationType.URGENT_REPLACEMENT,
-      title: '🚨 Термінова зміна',
+      title: '🚨 Потрібно закрити зміну',
       body,
       related_shift_id: shift.id,
-      metadata: { action: 'view_shift', shift_id: shift.id },
+      metadata: { action: 'book_shift', shift_id: shift.id },
     }));
-
-    this.events.emit('ws.emergency_shift', shift);
   }
 
   @OnEvent('replacement.requested')

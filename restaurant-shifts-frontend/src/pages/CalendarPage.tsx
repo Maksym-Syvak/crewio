@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useShiftsStore } from '@/store';
-import { ShiftModal } from '@/components/ShiftModal';
-import { dayjs } from '@/utils/dates';
-import type { Shift } from '@/types';
+import { dayjs, formatTime } from '@/utils/dates';
+import type { Shift, ShiftBooking } from '@/types';
 import { cn } from '@/utils/cn';
-import { isEmployeeBooked } from '@/utils/shifts';
+import {
+  getBookingEmoji,
+  getBookingTimeRange,
+  getShiftBookings,
+  isEmployeeBooked,
+  isShiftUrgent,
+} from '@/utils/shifts';
 
 export default function CalendarPage() {
   const navigate = useNavigate();
@@ -14,7 +19,7 @@ export default function CalendarPage() {
   const shifts = useShiftsStore((s) => s.shifts);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
   const [month, setMonth] = useState(dayjs());
-  const [selected, setSelected] = useState<Shift | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   useEffect(() => {
     if (restaurant) fetchShifts(restaurant.id);
@@ -41,11 +46,27 @@ export default function CalendarPage() {
     return map;
   }, [shifts]);
 
+  const dayBookings = useMemo(() => {
+    if (!selectedDay) return [];
+    const dayShifts = shiftsByDay.get(selectedDay) ?? [];
+    const items: { booking: ShiftBooking; shift: Shift }[] = [];
+    for (const shift of dayShifts) {
+      for (const booking of getShiftBookings(shift).filter((b) => b.status !== 'cancelled')) {
+        items.push({ booking, shift });
+      }
+    }
+    return items.sort((a, b) => {
+      const aStart = getBookingTimeRange(a.booking, a.shift).start;
+      const bStart = getBookingTimeRange(b.booking, b.shift).start;
+      return aStart.localeCompare(bStart);
+    });
+  }, [selectedDay, shiftsByDay]);
+
   const getDayVariant = (date: dayjs.Dayjs) => {
     const key = date.format('YYYY-MM-DD');
     const dayShifts = shiftsByDay.get(key) ?? [];
     if (!dayShifts.length) return 'dayoff';
-    if (dayShifts.some((s) => s.is_urgent)) return 'urgent';
+    if (dayShifts.some((s) => isShiftUrgent(s))) return 'urgent';
     if (dayShifts.some((s) => isEmployeeBooked(s, employee?.id))) return 'mine';
     return 'available';
   };
@@ -91,6 +112,7 @@ export default function CalendarPage() {
           const key = d.format('YYYY-MM-DD');
           const dayShifts = shiftsByDay.get(key) ?? [];
           const inMonth = d.month() === month.month();
+          const selected = selectedDay === key;
 
           return (
             <button
@@ -100,11 +122,9 @@ export default function CalendarPage() {
                 'flex aspect-square flex-col items-center justify-center rounded-lg text-sm',
                 !inMonth && 'opacity-30',
                 d.isSame(dayjs(), 'day') && 'ring-2 ring-[var(--tg-link)]',
+                selected && 'bg-[var(--tg-secondary-bg)]',
               )}
-              onClick={() => {
-                if (dayShifts.length === 1) setSelected(dayShifts[0]);
-                else if (dayShifts.length > 1) setSelected(dayShifts[0]);
-              }}
+              onClick={() => setSelectedDay(key)}
             >
               {d.date()}
               {dayShifts.length > 0 && (
@@ -121,24 +141,52 @@ export default function CalendarPage() {
         <Legend color="bg-[var(--crew-green)]" label="Моя зміна" />
         <Legend color="bg-[var(--crew-blue)]" label="Доступна" />
         <Legend color="bg-[var(--crew-red)]" label="Термінова" />
-        <Legend color="bg-[var(--crew-gray)]" label="Вихідний" />
+        <Legend emoji="🟢" label="Повна" />
+        <Legend emoji="🟠" label="Часткова" />
       </div>
 
-      {selected && (
-        <ShiftModal
-          shift={selected}
-          onClose={() => setSelected(null)}
-          onOpen={() => navigate(`/shifts/${selected.id}`)}
-        />
+      {selectedDay && (
+        <section className="card mt-4">
+          <h2 className="mb-3 font-semibold">{dayjs(selectedDay).format('DD.MM.YYYY')}</h2>
+          {dayBookings.length === 0 ? (
+            <p className="text-sm text-[var(--tg-hint)]">
+              {(shiftsByDay.get(selectedDay) ?? []).length > 0
+                ? 'Немає бронювань — зміни доступні для запису'
+                : 'Вихідний'}
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {dayBookings.map(({ booking, shift }) => {
+                const range = getBookingTimeRange(booking, shift);
+                const name = `${booking.employee?.user?.first_name ?? ''} ${booking.employee?.user?.last_name ?? ''}`.trim();
+                return (
+                  <li key={booking.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg bg-[var(--tg-secondary-bg)] px-3 py-2 text-left text-sm"
+                      onClick={() => navigate(`/shifts/${shift.id}`)}
+                    >
+                      <span>{getBookingEmoji(booking)}</span>
+                      <span className="font-medium">{name || 'Працівник'}</span>
+                      <span className="ml-auto text-[var(--tg-hint)]">
+                        {formatTime(range.start)}–{formatTime(range.end)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       )}
     </div>
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function Legend({ color, label, emoji }: { color?: string; label: string; emoji?: string }) {
   return (
     <span className="flex items-center gap-1">
-      <span className={cn('h-2 w-2 rounded-full', color)} />
+      {emoji ? <span>{emoji}</span> : <span className={cn('h-2 w-2 rounded-full', color)} />}
       {label}
     </span>
   );

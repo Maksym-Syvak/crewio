@@ -4,7 +4,6 @@ import { ShiftsService } from './shifts.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { GenerateScheduleDto } from './dto/generate-schedule.dto';
-import { CloseShiftDto } from './dto/close-shift.dto';
 import { BookShiftDto, CannotMakeShiftDto } from './dto/book-shift.dto';
 import { ShiftStatus } from './entities/shift.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -56,16 +55,10 @@ export class ShiftsController {
     return this.shiftsService.remove(id);
   }
 
-  @Roles('owner', 'admin')
-  @Post(':id/close')
-  close(@Param('id') id: string, @Body() dto: CloseShiftDto) {
-    return this.shiftsService.closeShift(id, dto);
-  }
-
-  // Employee books an open shift (TOR section 11)
+  // Employee books an open shift
   @Post(':id/book')
   book(@Param('id') id: string, @Body() dto: BookShiftDto) {
-    return this.shiftsService.book(id, dto.employee_id);
+    return this.shiftsService.book(id, dto);
   }
 
   // Employee says "I can't make my shift" (TOR section 12)

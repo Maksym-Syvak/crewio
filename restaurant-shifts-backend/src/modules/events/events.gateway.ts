@@ -51,6 +51,11 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(`restaurant:${shift.restaurant_id}`).emit('shift_updated', shift);
   }
 
+  @OnEvent('shift.started')
+  onShiftStarted(shift: any) {
+    this.server.to(`restaurant:${shift.restaurant_id}`).emit('shift_updated', shift);
+  }
+
   @OnEvent('shift.deleted')
   onShiftDeleted(payload: { id: string }) {
     this.server.emit('shift_deleted', payload);

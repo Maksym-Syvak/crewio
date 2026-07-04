@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { PaymentType, Shift, ShiftStatus } from '@/types';
+import type { BookingType, PaymentType, Shift, ShiftStatus } from '@/types';
 
 export interface CreateShiftPayload {
   restaurant_id: string;
@@ -12,12 +12,13 @@ export interface CreateShiftPayload {
   shift_rate?: number;
   hourly_rate?: number;
   fixed_rate?: number;
-  is_urgent?: boolean;
 }
 
-export interface CloseShiftPayload {
-  actual_start_time: string;
-  actual_end_time: string;
+export interface BookShiftPayload {
+  employee_id: string;
+  booking_type?: BookingType;
+  booked_start_time?: string;
+  booked_end_time?: string;
 }
 
 export const shiftsApi = {
@@ -35,13 +36,10 @@ export const shiftsApi = {
   update: (id: string, data: Partial<CreateShiftPayload & { required_employees?: number }>) =>
     api.put<Shift>(`/shifts/${id}`, data).then((r) => r.data),
 
-  close: (id: string, data: CloseShiftPayload) =>
-    api.post<Shift>(`/shifts/${id}/close`, data).then((r) => r.data),
-
   remove: (id: string) => api.delete(`/shifts/${id}`),
 
-  book: (id: string, employee_id: string) =>
-    api.post<Shift>(`/shifts/${id}/book`, { employee_id }).then((r) => r.data),
+  book: (id: string, data: BookShiftPayload) =>
+    api.post<Shift>(`/shifts/${id}/book`, data).then((r) => r.data),
 
   cannotMakeIt: (id: string, employee_id: string) =>
     api

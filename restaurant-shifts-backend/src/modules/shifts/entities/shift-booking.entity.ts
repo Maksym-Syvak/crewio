@@ -14,6 +14,11 @@ export enum ShiftBookingStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum BookingType {
+  FULL = 'full',
+  PARTIAL = 'partial',
+}
+
 @Entity('shift_bookings')
 export class ShiftBooking {
   @PrimaryGeneratedColumn('uuid')
@@ -34,6 +39,15 @@ export class ShiftBooking {
   })
   @JoinColumn({ name: 'employee_id' })
   employee: Employee;
+
+  @Column({ type: 'enum', enum: BookingType, default: BookingType.FULL })
+  booking_type: BookingType;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  booked_start_time: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  booked_end_time: Date | null;
 
   @Column({
     type: 'enum',

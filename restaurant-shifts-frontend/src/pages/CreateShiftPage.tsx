@@ -69,7 +69,6 @@ export default function CreateShiftPage() {
   const [shiftRate, setShiftRate] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
   const [fixedRate, setFixedRate] = useState('');
-  const [isUrgent, setIsUrgent] = useState(false);
   const [rotationPreset, setRotationPreset] = useState<RotationPreset>('5_2');
   const [workDays, setWorkDays] = useState(5);
   const [restDays, setRestDays] = useState(2);
@@ -126,7 +125,6 @@ export default function CreateShiftPage() {
         required_employees: requiredEmployees,
         shift_type: shiftType || undefined,
         ...paymentPayload(),
-        is_urgent: isUrgent,
       });
       push({ type: 'success', title: 'Зміну створено' });
       navigate('/shifts');
@@ -220,8 +218,6 @@ export default function CreateShiftPage() {
         shiftRate={shiftRate}
         hourlyRate={hourlyRate}
         fixedRate={fixedRate}
-        isUrgent={isUrgent}
-        showUrgent={createMode === 'single'}
         onStartTime={setStartTime}
         onEndTime={setEndTime}
         onRequired={setRequiredEmployees}
@@ -230,7 +226,6 @@ export default function CreateShiftPage() {
         onShiftRate={setShiftRate}
         onHourlyRate={setHourlyRate}
         onFixedRate={setFixedRate}
-        onUrgent={setIsUrgent}
       />
 
       {createMode === 'single' && (
@@ -336,19 +331,17 @@ export default function CreateShiftPage() {
 
 function SharedFields({
   startTime, endTime, requiredEmployees, shiftType, paymentType,
-  shiftRate, hourlyRate, fixedRate, isUrgent, showUrgent,
+  shiftRate, hourlyRate, fixedRate,
   onStartTime, onEndTime, onRequired, onShiftType, onPaymentType,
-  onShiftRate, onHourlyRate, onFixedRate, onUrgent,
+  onShiftRate, onHourlyRate, onFixedRate,
 }: {
   startTime: string; endTime: string; requiredEmployees: number; shiftType: string;
   paymentType: PaymentType; shiftRate: string; hourlyRate: string; fixedRate: string;
-  isUrgent: boolean; showUrgent: boolean;
   onStartTime: (v: string) => void; onEndTime: (v: string) => void;
   onRequired: (v: number) => void; onShiftType: (v: string) => void;
   onPaymentType: (v: PaymentType) => void;
   onShiftRate: (v: string) => void; onHourlyRate: (v: string) => void;
   onFixedRate: (v: string) => void;
-  onUrgent: (v: boolean) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -395,12 +388,6 @@ function SharedFields({
         <Field label="Фіксована ставка за вихід (₴)">
           <input className="field-input" type="number" min={0} placeholder="500" value={fixedRate} onChange={(e) => onFixedRate(e.target.value)} />
         </Field>
-      )}
-      {showUrgent && (
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isUrgent} onChange={(e) => onUrgent(e.target.checked)} />
-          Термінова зміна
-        </label>
       )}
     </div>
   );

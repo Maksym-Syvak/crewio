@@ -1,4 +1,5 @@
 import { PaymentType, Shift } from '../entities/shift.entity';
+import { BookingType, ShiftBooking } from '../entities/shift-booking.entity';
 
 /** Extension point for night coefficients, overtime, holidays, bonuses, penalties */
 export interface PayModifiers {
@@ -9,19 +10,28 @@ export interface PayModifiers {
   penalty?: number;
 }
 
-export function getPlannedHours(shift: Pick<Shift, 'start_time' | 'end_time'>): number {
-  return (shift.end_time.getTime() - shift.start_time.getTime()) / 3_600_000;
+export function getBookingStart(booking: ShiftBooking, shift: Shift): Date {
+  if (booking.booking_type === BookingType.PARTIAL && booking.booked_start_time) {
+    return booking.booked_start_time;
+  }
+  return shift.start_time;
 }
 
-export function getActualHours(
-  shift: Pick<Shift, 'start_time' | 'end_time' | 'actual_start_time' | 'actual_end_time'>,
-): number {
-  if (shift.actual_start_time && shift.actual_end_time) {
-    return (
-      (shift.actual_end_time.getTime() - shift.actual_start_time.getTime()) / 3_600_000
-    );
+export function getBookingEnd(booking: ShiftBooking, shift: Shift): Date {
+  if (booking.booking_type === BookingType.PARTIAL && booking.booked_end_time) {
+    return booking.booked_end_time;
   }
-  return getPlannedHours(shift);
+  return shift.end_time;
+}
+
+export function getBookingHours(booking: ShiftBooking, shift: Shift): number {
+  const start = getBookingStart(booking, shift);
+  const end = getBookingEnd(booking, shift);
+  return (end.getTime() - start.getTime()) / 3_600_000;
+}
+
+export function getPlannedHours(shift: Pick<Shift, 'start_time' | 'end_time'>): number {
+  return (shift.end_time.getTime() - shift.start_time.getTime()) / 3_600_000;
 }
 
 function applyModifiers(base: number, modifiers?: PayModifiers): number {
@@ -40,14 +50,15 @@ function applyModifiers(base: number, modifiers?: PayModifiers): number {
   return Math.max(0, Math.round(total * 100) / 100);
 }
 
-export function calculatePlannedSalary(
+export function calculateBookingSalary(
   shift: Pick<
     Shift,
     'payment_type' | 'shift_rate' | 'hourly_rate' | 'fixed_rate' | 'payment_rate' | 'start_time' | 'end_time'
   >,
+  booking: ShiftBooking,
   modifiers?: PayModifiers,
 ): number {
-  const hours = getPlannedHours(shift);
+  const hours = getBookingHours(booking, shift as Shift);
   let base = 0;
 
   switch (shift.payment_type) {
@@ -66,24 +77,38 @@ export function calculatePlannedSalary(
   return applyModifiers(base, modifiers);
 }
 
-export function calculateActualSalary(
+/** @deprecated use calculateBookingSalary */
+export function calculatePlannedSalary(
   shift: Pick<
     Shift,
-    | 'payment_type'
-    | 'shift_rate'
-    | 'hourly_rate'
-    | 'fixed_rate'
-    | 'payment_rate'
-    | 'start_time'
-    | 'end_time'
-    | 'actual_start_time'
-    | 'actual_end_time'
+    'payment_type' | 'shift_rate' | 'hourly_rate' | 'fixed_rate' | 'payment_rate' | 'start_time' | 'end_time'
   >,
   modifiers?: PayModifiers,
 ): number {
-  if (shift.payment_type === PaymentType.HOURLY) {
-    const hours = getActualHours(shift);
-    return applyModifiers(hours * Number(shift.hourly_rate ?? 0), modifiers);
+  const hours = getPlannedHours(shift);
+  let base = 0;
+  switch (shift.payment_type) {
+    case PaymentType.HOURLY:
+      base = hours * Number(shift.hourly_rate ?? 0);
+      break;
+    case PaymentType.FIXED:
+      base = Number(shift.fixed_rate ?? 0);
+      break;
+    default:
+      base = Number(shift.shift_rate ?? shift.payment_rate ?? 0);
   }
+  return applyModifiers(base, modifiers);
+}
+
+/** @deprecated use calculateBookingSalary */
+export function calculateActualSalary(
+  shift: Pick<
+    Shift,
+    'payment_type' | 'shift_rate' | 'hourly_rate' | 'fixed_rate' | 'payment_rate' | 'start_time' | 'end_time'
+  >,
+  booking?: ShiftBooking,
+  modifiers?: PayModifiers,
+): number {
+  if (booking) return calculateBookingSalary(shift, booking, modifiers);
   return calculatePlannedSalary(shift, modifiers);
 }

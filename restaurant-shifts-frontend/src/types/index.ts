@@ -22,10 +22,13 @@ export type ShiftStatus =
   | 'partially_filled'
   | 'fully_filled'
   | 'urgent'
+  | 'active'
   | 'completed'
   | 'cancelled';
 
 export type PaymentType = 'shift' | 'hourly' | 'fixed';
+
+export type BookingType = 'full' | 'partial';
 
 export type ReplacementStatus =
   | 'pending'
@@ -134,6 +137,9 @@ export interface ShiftBooking {
   id: string;
   shift_id: string;
   employee_id: string;
+  booking_type?: BookingType;
+  booked_start_time?: string | null;
+  booked_end_time?: string | null;
   status?: 'confirmed' | 'cancelled';
   planned_salary?: number | null;
   actual_salary?: number | null;
@@ -159,8 +165,6 @@ export interface Shift {
   shift_rate?: number | null;
   hourly_rate?: number | null;
   fixed_rate?: number | null;
-  actual_start_time?: string | null;
-  actual_end_time?: string | null;
   status: ShiftStatus;
   is_urgent: boolean;
   created_at: string;

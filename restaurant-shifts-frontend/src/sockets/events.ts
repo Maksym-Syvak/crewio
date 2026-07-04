@@ -54,8 +54,8 @@ export function connectSocket(restaurantId?: string, userId?: string) {
     upsertShift(shift);
     push({
       type: 'urgent',
-      title: '🚨 Термінова зміна',
-      body: shift.shift_type ?? 'Потрібна заміна',
+      title: '🚨 Потрібно закрити зміну',
+      body: shift.restaurant?.name ?? shift.shift_type ?? '',
     });
   });
 

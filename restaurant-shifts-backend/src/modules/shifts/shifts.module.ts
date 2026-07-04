@@ -6,13 +6,14 @@ import { Employee } from '../employees/entities/employee.entity';
 import { ReplacementRequest } from '../replacement-requests/entities/replacement-request.entity';
 import { ShiftsService } from './shifts.service';
 import { ShiftsController } from './shifts.controller';
+import { ShiftsScheduler } from './shifts.scheduler';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Shift, ShiftBooking, Employee, ReplacementRequest]),
   ],
   controllers: [ShiftsController],
-  providers: [ShiftsService],
+  providers: [ShiftsService, ShiftsScheduler],
   exports: [ShiftsService],
 })
 export class ShiftsModule {}

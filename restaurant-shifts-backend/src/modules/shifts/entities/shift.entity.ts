@@ -17,6 +17,7 @@ export enum ShiftStatus {
   PARTIALLY_FILLED = 'partially_filled',
   FULLY_FILLED = 'fully_filled',
   URGENT = 'urgent',
+  ACTIVE = 'active',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
 }
@@ -75,17 +76,15 @@ export class Shift {
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   fixed_rate: number | null;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  actual_start_time: Date | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  actual_end_time: Date | null;
-
   @Column({ type: 'enum', enum: ShiftStatus, default: ShiftStatus.OPEN })
   status: ShiftStatus;
 
   @Column({ default: false })
   is_urgent: boolean;
+
+  /** Hours-before-start thresholds for which urgent reminders were sent (24, 12, 6, 2) */
+  @Column({ type: 'jsonb', nullable: true, default: () => "'[]'" })
+  urgent_notified_at: number[];
 
   /** @deprecated Shifts are open pool — no position required */
   @Column({ type: 'uuid', nullable: true })

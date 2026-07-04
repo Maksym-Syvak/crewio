@@ -3,13 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { Statistics } from './entities/statistics.entity';
-import { Employee } from '../employees/entities/employee.entity';
 import { ShiftBooking, ShiftBookingStatus } from '../shifts/entities/shift-booking.entity';
 import { ShiftStatus } from '../shifts/entities/shift.entity';
 import {
-  calculateActualSalary,
-  calculatePlannedSalary,
-  getActualHours,
+  calculateBookingSalary,
+  getBookingHours,
   getPlannedHours,
 } from '../shifts/utils/payment-calculator';
 
@@ -31,8 +29,6 @@ export class StatisticsService {
   constructor(
     @InjectRepository(Statistics)
     private readonly statsRepo: Repository<Statistics>,
-    @InjectRepository(Employee)
-    private readonly employeesRepo: Repository<Employee>,
     @InjectRepository(ShiftBooking)
     private readonly bookingsRepo: Repository<ShiftBooking>,
   ) {}
@@ -80,26 +76,29 @@ export class StatisticsService {
 
     for (const b of bookings) {
       const shift = b.shift;
-      const planned = getPlannedHours(shift);
-      const actual = shift.status === ShiftStatus.COMPLETED ? getActualHours(shift) : planned;
+      const planned = getBookingHours(b, shift);
+      const actual = shift.status === ShiftStatus.COMPLETED ? planned : planned;
 
       plannedHours += planned;
       actualHours += actual;
 
-      const plannedPay = b.planned_salary != null ? Number(b.planned_salary) : calculatePlannedSalary(shift);
+      const plannedPay =
+        b.planned_salary != null ? Number(b.planned_salary) : calculateBookingSalary(shift, b);
       const actualPay =
         b.actual_salary != null
           ? Number(b.actual_salary)
           : shift.status === ShiftStatus.COMPLETED
-            ? calculateActualSalary(shift)
+            ? calculateBookingSalary(shift, b)
             : plannedPay;
 
       plannedSalary += plannedPay;
       actualSalary += actualPay;
 
+      const shiftHours = getPlannedHours(shift);
       if (shift.start_time.getHours() >= 22 || shift.start_time.getHours() < 6) {
         nightShifts += 1;
       }
+      void shiftHours;
     }
 
     const monthDate = `${normalized}-01`;
@@ -111,9 +110,11 @@ export class StatisticsService {
     }
 
     row.planned_hours = plannedHours;
-    row.actual_hours = actualHours;
-    row.worked_hours = actualHours;
-    row.worked_shifts = bookings.length;
+    row.actual_hours = actualSalary > 0 && bookings.some((b) => b.shift.status === ShiftStatus.COMPLETED)
+      ? actualHours
+      : plannedHours;
+    row.worked_hours = row.actual_hours;
+    row.worked_shifts = bookings.filter((b) => b.shift.status === ShiftStatus.COMPLETED).length || bookings.length;
     row.night_shifts = nightShifts;
     row.planned_salary = plannedSalary;
     row.actual_salary = actualSalary;
