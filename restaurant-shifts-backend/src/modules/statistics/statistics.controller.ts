@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { StatisticsService } from './statistics.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -13,8 +13,12 @@ export class StatisticsController {
   constructor(private readonly service: StatisticsService) {}
 
   @Get()
-  findAll(@Query('employeeId') employeeId?: string, @Query('month') month?: string) {
-    return this.service.findAll({ employeeId, month });
+  findAll(
+    @Req() req: { user: { sub: string } },
+    @Query('employeeId') employeeId?: string,
+    @Query('month') month?: string,
+  ) {
+    return this.service.findAllForUser(req.user.sub, { employeeId, month });
   }
 
   @Roles('owner', 'admin')

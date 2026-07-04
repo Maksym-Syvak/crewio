@@ -107,7 +107,7 @@ export default function ProfilePage() {
       </dl>
 
       <div className="mt-6 space-y-2 pb-4">
-        {!isEmployeeWithoutVenue && (
+        {employee?.id && (
           <button
             type="button"
             className="btn-secondary"

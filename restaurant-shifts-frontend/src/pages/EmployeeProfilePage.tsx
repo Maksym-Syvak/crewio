@@ -270,24 +270,45 @@ export default function EmployeeProfilePage() {
       </dl>
 
       <section className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold text-[var(--tg-hint)]">
-          Статистика · {month}
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard label="Взято змін" value={bookedShifts} />
-          <StatCard
-            label="Відпрацьовано годин"
-            value={Number(stats.actual_hours).toFixed(1)}
-          />
-          <StatCard
-            label="Очікувана зарплата"
-            value={formatSalary(Number(stats.planned_salary))}
-          />
-          <StatCard
-            label="Зароблено"
-            value={formatSalary(Number(stats.actual_salary))}
-          />
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-[var(--tg-hint)]">
+            Статистика · {month}
+          </h2>
+          <Link
+            to={`/statistics?employeeId=${employee.id}`}
+            className="text-sm text-[var(--tg-link)]"
+          >
+            Детальніше
+          </Link>
         </div>
+
+        {bookedShifts === 0 &&
+        (stats.worked_shifts ?? 0) === 0 &&
+        Number(stats.planned_hours) === 0 ? (
+          <p className="text-center text-sm text-[var(--tg-hint)]">
+            У працівника ще немає статистики.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard label="Кількість змін" value={bookedShifts} />
+            <StatCard
+              label="Заплановано годин"
+              value={Number(stats.planned_hours).toFixed(1)}
+            />
+            <StatCard
+              label="Відпрацьовано годин"
+              value={Number(stats.actual_hours).toFixed(1)}
+            />
+            <StatCard
+              label="Запланована зарплата"
+              value={formatSalary(Number(stats.planned_salary))}
+            />
+            <StatCard
+              label="Зароблено"
+              value={formatSalary(Number(stats.actual_salary))}
+            />
+          </div>
+        )}
       </section>
 
       <div className="mt-6 pb-4">

@@ -157,6 +157,27 @@ export class EmployeesService {
     throw new ForbiddenException('Немає доступу до персоналу цього закладу');
   }
 
+  async assertCanViewEmployeeStatistics(
+    userId: string,
+    targetEmployeeId: string,
+  ) {
+    const employee = await this.findOne(targetEmployeeId);
+    await this.assertCanViewEmployeeStatisticsForRecord(userId, employee);
+    return employee;
+  }
+
+  private async assertCanViewEmployeeStatisticsForRecord(
+    userId: string,
+    employee: Employee,
+  ) {
+    const role = await this.resolveWorkspaceRole(userId, employee.restaurant_id);
+    if (role === 'owner' || role === 'admin') return;
+    if (employee.user_id === userId) return;
+    throw new ForbiddenException(
+      'Немає доступу до статистики цього співробітника',
+    );
+  }
+
   private currentMonthKey() {
     return `${new Date().toISOString().slice(0, 7)}-01`;
   }
@@ -267,11 +288,7 @@ export class EmployeesService {
     requestUserRole: string,
   ) {
     const employee = await this.findOne(id);
-    await this.assertCanViewRestaurantStaff(
-      requestUserId,
-      requestUserRole,
-      employee.restaurant_id,
-    );
+    await this.assertCanViewEmployeeStatistics(requestUserId, id);
 
     const month = new Date().toISOString().slice(0, 7);
     const stats = await this.statisticsService.recompute(id, month);

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, forwardRef } from '@nestjs/common';
+import { EmployeesService } from '../employees/employees.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
@@ -36,7 +37,25 @@ export class StatisticsService {
     private readonly statsRepo: Repository<Statistics>,
     @InjectRepository(ShiftBooking)
     private readonly bookingsRepo: Repository<ShiftBooking>,
+    @Inject(forwardRef(() => EmployeesService))
+    private readonly employeesService: EmployeesService,
   ) {}
+
+  async findAllForUser(
+    userId: string,
+    filters: { employeeId?: string; month?: string },
+  ) {
+    if (!filters.employeeId) {
+      throw new BadRequestException('employeeId is required');
+    }
+
+    await this.employeesService.assertCanViewEmployeeStatistics(
+      userId,
+      filters.employeeId,
+    );
+
+    return this.findAll(filters);
+  }
 
   async findAll(filters: { employeeId?: string; month?: string }) {
     const where: Record<string, string> = {};

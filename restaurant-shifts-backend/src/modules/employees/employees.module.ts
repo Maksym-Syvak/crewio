@@ -15,7 +15,7 @@ import { Position } from '../positions/entities/position.entity';
     TypeOrmModule.forFeature([Employee, ShiftBooking, Statistics, Position]),
     forwardRef(() => RestaurantsModule),
     forwardRef(() => PositionsModule),
-    StatisticsModule,
+    forwardRef(() => StatisticsModule),
   ],
   controllers: [EmployeesController],
   providers: [EmployeesService],

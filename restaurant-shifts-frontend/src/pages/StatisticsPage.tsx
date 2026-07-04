@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { statisticsApi } from '@/api/statistics.api';
+import { Link, useSearchParams } from 'react-router-dom';
+import { employeesApi } from '@/api/employees.api';
 import { useAuthStore } from '@/store';
-import type { Statistics } from '@/types';
-import { formatMonth } from '@/utils/dates';
+import type { EmployeeProfile } from '@/types';
+import { formatMonth, formatShiftShort } from '@/utils/dates';
+import { formatSalary } from '@/utils/employees';
+import { canManageStaff } from '@/utils/roles';
 import { PageSkeleton } from '@/components/Skeleton';
+import { getErrorMessage } from '@/api/client';
 
 export default function StatisticsPage() {
-  const employee = useAuthStore((s) => s.employee);
+  const ownEmployee = useAuthStore((s) => s.employee);
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
   const [params] = useSearchParams();
-  const employeeId = params.get('employeeId') ?? employee?.id ?? undefined;
+  const queryEmployeeId = params.get('employeeId') ?? undefined;
+  const employeeId = queryEmployeeId ?? ownEmployee?.id ?? undefined;
+  const isStaffManager = canManageStaff(workspaceRole);
   const month = formatMonth();
-  const [stats, setStats] = useState<Statistics[]>([]);
+  const [profile, setProfile] = useState<EmployeeProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,24 +27,25 @@ export default function StatisticsPage() {
     async function load() {
       setLoading(true);
       setError(null);
+      setProfile(null);
 
       try {
         if (!employeeId) {
           return;
         }
 
-        const data = await statisticsApi.list(employeeId, month);
-        if (!cancelled) setStats(data);
-      } catch {
+        const data = await employeesApi.profile(employeeId);
+        if (!cancelled) setProfile(data);
+      } catch (e) {
         if (!cancelled) {
-          setError('Не вдалось завантажити статистику');
+          setError(getErrorMessage(e));
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    load();
+    void load();
     return () => {
       cancelled = true;
     };
@@ -47,6 +54,20 @@ export default function StatisticsPage() {
   if (loading) return <PageSkeleton />;
 
   if (!employeeId) {
+    if (isStaffManager) {
+      return (
+        <div className="page">
+          <h1 className="page-title">Статистика</h1>
+          <p className="text-center text-sm text-[var(--tg-hint)]">
+            Оберіть співробітника в розділі «Персонал», щоб переглянути статистику
+          </p>
+          <Link to="/staff" className="btn-primary mt-4 block text-center">
+            Перейти до персоналу
+          </Link>
+        </div>
+      );
+    }
+
     return (
       <div className="page">
         <h1 className="page-title">Статистика</h1>
@@ -57,64 +78,106 @@ export default function StatisticsPage() {
     );
   }
 
-  const current = stats[0] ?? {
-    worked_shifts: 0,
-    booked_shifts: 0,
-    planned_hours: 0,
-    actual_hours: 0,
-    worked_hours: 0,
-    planned_salary: 0,
-    actual_salary: 0,
-    expected_salary: 0,
-    replacements: 0,
-  };
+  if (error || !profile) {
+    return (
+      <div className="page">
+        {isStaffManager && (
+          <Link to="/staff" className="mb-3 inline-block text-sm text-[var(--tg-link)]">
+            ← Персонал
+          </Link>
+        )}
+        <h1 className="page-title">Статистика</h1>
+        <p className="text-center text-sm text-[var(--crew-crimson)]">
+          {error ?? 'Не вдалось завантажити статистику'}
+        </p>
+      </div>
+    );
+  }
 
-  const bookedShifts = current.booked_shifts ?? current.worked_shifts;
+  const { employee, stats, next_shift: nextShift } = profile;
+  const user = employee.user;
+  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ');
+  const bookedShifts = stats.booked_shifts ?? stats.worked_shifts ?? 0;
+  const hasNoStats =
+    bookedShifts === 0 &&
+    (stats.worked_shifts ?? 0) === 0 &&
+    Number(stats.planned_hours) === 0 &&
+    Number(stats.actual_hours) === 0;
+  const viewingOther = ownEmployee?.id !== employee.id;
   const maxShifts = Math.max(bookedShifts, 10);
 
   return (
     <div className="page">
-      <h1 className="page-title">Статистика</h1>
-      <p className="mb-4 text-sm text-[var(--tg-hint)]">Місяць: {month}</p>
-
-      {error && (
-        <p className="mb-4 text-sm text-[var(--crew-crimson)]">{error}</p>
+      {viewingOther && isStaffManager && (
+        <Link
+          to={`/staff/${employee.id}`}
+          className="mb-3 inline-block text-sm text-[var(--tg-link)]"
+        >
+          ← {fullName || 'Профіль співробітника'}
+        </Link>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Stat label="Заброньовано змін" value={bookedShifts} />
-        <Stat label="Відпрацьовано змін" value={current.worked_shifts} />
-        <Stat label="Заплановано годин" value={Number(current.planned_hours).toFixed(1)} />
-        <Stat label="Відпрацьовано годин" value={Number(current.actual_hours).toFixed(1)} />
-        <Stat label="Замін" value={current.replacements} />
-      </div>
+      <h1 className="page-title">Статистика</h1>
+      {viewingOther && fullName && (
+        <p className="mb-1 text-sm font-medium">{fullName}</p>
+      )}
+      <p className="mb-4 text-sm text-[var(--tg-hint)]">Місяць: {month}</p>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <Stat label="Запланована зарплата" value={`${Math.round(Number(current.planned_salary))} ₴`} />
-        <Stat label="Зароблено" value={`${Math.round(Number(current.actual_salary))} ₴`} />
-      </div>
+      {hasNoStats ? (
+        <p className="text-center text-sm text-[var(--tg-hint)]">
+          У працівника ще немає статистики.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Stat label="Кількість змін" value={bookedShifts} />
+            <Stat
+              label="Заплановано годин"
+              value={Number(stats.planned_hours).toFixed(1)}
+            />
+            <Stat
+              label="Відпрацьовано годин"
+              value={Number(stats.actual_hours).toFixed(1)}
+            />
+            <Stat
+              label="Запланована зарплата"
+              value={formatSalary(Number(stats.planned_salary))}
+            />
+            <Stat
+              label="Зароблено"
+              value={formatSalary(Number(stats.actual_salary))}
+            />
+            {nextShift && (
+              <Stat
+                label="Найближча зміна"
+                value={formatShiftShort(nextShift.start_time)}
+              />
+            )}
+          </div>
 
-      <section className="card mt-6">
-        <h2 className="mb-3 text-sm font-semibold">Зміни за місяць</h2>
-        <div className="flex h-32 items-end gap-2">
-          {Array.from({ length: 4 }).map((_, i) => {
-            const h = Math.round(
-              (bookedShifts / maxShifts) * 100 * (1 - i * 0.15),
-            );
-            return (
-              <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                <div
-                  className="w-full rounded-t bg-[var(--tg-button)]"
-                  style={{ height: `${Math.max(h, 8)}%` }}
-                />
-                <span className="text-[10px] text-[var(--tg-hint)]">
-                  {month.slice(5)}-{i + 1}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+          <section className="card mt-6">
+            <h2 className="mb-3 text-sm font-semibold">Зміни за місяць</h2>
+            <div className="flex h-32 items-end gap-2">
+              {Array.from({ length: 4 }).map((_, i) => {
+                const h = Math.round(
+                  (bookedShifts / maxShifts) * 100 * (1 - i * 0.15),
+                );
+                return (
+                  <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                    <div
+                      className="w-full rounded-t bg-[var(--tg-button)]"
+                      style={{ height: `${Math.max(h, 8)}%` }}
+                    />
+                    <span className="text-[10px] text-[var(--tg-hint)]">
+                      {month.slice(5)}-{i + 1}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
