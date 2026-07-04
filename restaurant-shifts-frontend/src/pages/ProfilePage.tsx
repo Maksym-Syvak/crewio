@@ -4,7 +4,6 @@ import { useAuthStore, useToastStore } from '@/store';
 import { ROLE_LABELS, canManageStaff } from '@/utils/roles';
 import { LogoutModal } from '@/components/LogoutModal';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
-import { ChangePasswordModal } from '@/components/ChangePasswordModal';
 import { clearAppSession } from '@/utils/session';
 import { ONBOARDING_PATHS } from '@/store/onboarding';
 import { usersApi } from '@/api/users.api';
@@ -13,7 +12,6 @@ import { getErrorMessage } from '@/api/client';
 export default function ProfilePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const setUser = (u: typeof user) => useAuthStore.setState({ user: u });
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
   const push = useToastStore((s) => s.push);
@@ -21,7 +19,6 @@ export default function ProfilePage() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
 
   const handleLogoutConfirm = async () => {
     setLogoutLoading(true);
@@ -86,7 +83,7 @@ export default function ProfilePage() {
       )}
 
       <dl className="card mt-6 space-y-3 text-sm">
-        <Row label="Telegram ID" value={user?.telegram_id ?? '—'} />
+        <Row label="Telegram" value={user?.username ? `@${user.username.replace(/^@/, '')}` : '—'} />
         <Row label="Посада" value={employee?.position?.name ?? '—'} />
         <Row
           label="Бажані зміни/міс"
@@ -109,9 +106,6 @@ export default function ProfilePage() {
             Персонал
           </button>
         )}
-        <button type="button" className="btn-secondary" onClick={() => setPasswordOpen(true)}>
-          {user?.has_password ? 'Змінити пароль' : 'Створити пароль'}
-        </button>
         <button type="button" className="btn-danger" onClick={() => setLogoutOpen(true)}>
           Вийти
         </button>
@@ -147,12 +141,6 @@ export default function ProfilePage() {
         loading={deleteLoading}
         onCancel={() => setDeleteOpen(false)}
         onConfirm={handleDeleteConfirm}
-      />
-      <ChangePasswordModal
-        open={passwordOpen}
-        hasPassword={Boolean(user?.has_password)}
-        onClose={() => setPasswordOpen(false)}
-        onSuccess={(updated) => setUser(updated)}
       />
     </div>
   );

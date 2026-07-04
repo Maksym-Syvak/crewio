@@ -63,7 +63,6 @@ export interface User {
   photo_url?: string;
   role: UserRole;
   is_profile_completed: boolean;
-  has_password?: boolean;
   created_at: string;
 }
 
@@ -131,6 +130,24 @@ export interface Employee {
   user?: User;
   position?: Position;
   restaurant?: Restaurant;
+  summary?: EmployeeSummary;
+}
+
+export interface EmployeeSummary {
+  next_shift_start: string | null;
+  next_shift_end: string | null;
+  booked_shifts_month: number;
+  planned_salary: number;
+}
+
+export interface EmployeeProfile {
+  employee: Employee;
+  stats: Statistics;
+  next_shift: {
+    id: string;
+    start_time: string;
+    end_time: string;
+  } | null;
 }
 
 export interface ShiftBooking {

@@ -21,6 +21,7 @@ const EmergencyPage = lazy(() => import('@/pages/EmergencyPage'));
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const StaffPage = lazy(() => import('@/pages/StaffPage'));
+const EmployeeProfilePage = lazy(() => import('@/pages/EmployeeProfilePage'));
 const CreateShiftPage = lazy(() => import('@/pages/CreateShiftPage'));
 const StatisticsPage = lazy(() => import('@/pages/StatisticsPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
@@ -136,6 +137,14 @@ function AppBootstrap() {
               element={
                 <RouteGuard adminOnly>
                   <InviteEmployeePage />
+                </RouteGuard>
+              }
+            />
+            <Route
+              path="staff/:employeeId"
+              element={
+                <RouteGuard adminOnly>
+                  <EmployeeProfilePage />
                 </RouteGuard>
               }
             />

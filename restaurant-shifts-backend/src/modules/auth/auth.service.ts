@@ -13,7 +13,6 @@ import { Repository } from 'typeorm';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/entities/user.entity';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
-import { LoginPasswordDto } from './dto/login-password.dto';
 import { toPublicUser } from '../../common/utils/user-response';
 import { RefreshToken } from './entities/refresh-token.entity';
 
@@ -121,12 +120,11 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('User not found');
     const accessToken = await this.signToken(user);
     const refreshToken = await this.createRefreshToken(user.id);
-    const withPassword = await this.usersService.findByIdWithPassword(user.id);
     return {
       accessToken,
       refreshToken,
       expiresIn: this.getAccessExpiresInSeconds(),
-      user: toPublicUser(user, withPassword?.password_hash),
+      user: toPublicUser(user),
     };
   }
 
@@ -262,20 +260,6 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  async loginWithPassword(dto: LoginPasswordDto) {
-    const user = await this.usersService.findByLogin(dto.login);
-    if (!user?.password_hash) {
-      throw new UnauthorizedException('Невірний логін або пароль');
-    }
-
-    const valid = await this.usersService.verifyPassword(dto.password, user.password_hash);
-    if (!valid) {
-      throw new UnauthorizedException('Невірний логін або пароль');
-    }
-
-    return this.buildAuthResponse(user);
-  }
-
   async devLogin(telegramId: string, firstName = 'Dev User') {
     if (this.config.get<string>('NODE_ENV') === 'production') {
       throw new UnauthorizedException('Dev login is disabled in production');
@@ -295,32 +279,16 @@ export class AuthService {
   }
 
   async completeProfile(userId: string, dto: CompleteProfileDto) {
-    const user = await this.usersService.findByIdWithPassword(userId);
+    const user = await this.usersService.findById(userId);
     if (!user) throw new UnauthorizedException('User not found');
 
-    const needsPassword = !user.password_hash;
-    if (needsPassword) {
-      if (!dto.password || !dto.password_confirm) {
-        throw new BadRequestException('Створіть пароль для входу');
-      }
-      if (dto.password !== dto.password_confirm) {
-        throw new BadRequestException('Паролі не співпадають');
-      }
-    }
-
-    const update: Partial<typeof user> = {
+    await this.usersService.update(userId, {
       first_name: dto.first_name,
       last_name: dto.last_name,
       phone: dto.phone,
       role: dto.role,
       is_profile_completed: true,
-    };
-
-    if (dto.password) {
-      update.password_hash = await this.usersService.hashPassword(dto.password);
-    }
-
-    await this.usersService.update(userId, update);
+    });
     const updated = await this.usersService.findById(userId);
     return this.buildAuthResponse(updated);
   }

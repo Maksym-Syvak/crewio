@@ -2,20 +2,15 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { User, UserRole } from './entities/user.entity';
 import { Employee } from '../employees/entities/employee.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { Statistics } from '../statistics/entities/statistics.entity';
 import { Restaurant } from '../restaurants/entities/restaurant.entity';
-import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
-
-const BCRYPT_ROUNDS = 10;
 
 @Injectable()
 export class UsersService {
@@ -70,35 +65,6 @@ export class UsersService {
     return this.usersRepo.findOne({ where: { id, is_deleted: false } });
   }
 
-  findByIdWithPassword(id: string) {
-    return this.usersRepo
-      .createQueryBuilder('user')
-      .addSelect('user.password_hash')
-      .where('user.id = :id', { id })
-      .andWhere('user.is_deleted = false')
-      .getOne();
-  }
-
-  findByLogin(login: string) {
-    const normalized = login.trim();
-    return this.usersRepo
-      .createQueryBuilder('user')
-      .addSelect('user.password_hash')
-      .where('user.is_deleted = false')
-      .andWhere('(user.phone = :login OR user.username = :login)', {
-        login: normalized,
-      })
-      .getOne();
-  }
-
-  async hashPassword(plain: string) {
-    return bcrypt.hash(plain, BCRYPT_ROUNDS);
-  }
-
-  async verifyPassword(plain: string, hash: string) {
-    return bcrypt.compare(plain, hash);
-  }
-
   create(data: Partial<User>) {
     const user = this.usersRepo.create(data);
     return this.usersRepo.save(user);
@@ -106,27 +72,6 @@ export class UsersService {
 
   update(id: string, data: Partial<User>) {
     return this.usersRepo.update(id, data).then(() => this.findById(id));
-  }
-
-  async changePassword(userId: string, dto: ChangePasswordDto) {
-    if (dto.password !== dto.password_confirm) {
-      throw new BadRequestException('Паролі не співпадають');
-    }
-
-    const user = await this.findByIdWithPassword(userId);
-    if (!user) throw new NotFoundException('User not found');
-
-    if (user.password_hash) {
-      if (!dto.current_password) {
-        throw new BadRequestException('Вкажіть поточний пароль');
-      }
-      const ok = await this.verifyPassword(dto.current_password, user.password_hash);
-      if (!ok) throw new UnauthorizedException('Невірний поточний пароль');
-    }
-
-    const password_hash = await this.hashPassword(dto.password);
-    await this.usersRepo.update(userId, { password_hash });
-    return this.findById(userId);
   }
 
   async deleteAccount(userId: string, dto: DeleteAccountDto) {

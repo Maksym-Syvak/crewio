@@ -15,8 +15,6 @@ export interface CompleteProfilePayload {
   last_name: string;
   phone: string;
   role: UserRole;
-  password?: string;
-  password_confirm?: string;
 }
 
 export const authApi = {
@@ -39,11 +37,6 @@ export const authApi = {
   recreateAccount: (initData: string) =>
     api
       .post<AuthResponse>('/auth/recreate-account', { initData })
-      .then((r) => r.data),
-
-  loginPassword: (login: string, password: string) =>
-    api
-      .post<AuthResponse>('/auth/login-password', { login, password })
       .then((r) => r.data),
 
   devLogin: (telegram_id: string, first_name?: string) =>

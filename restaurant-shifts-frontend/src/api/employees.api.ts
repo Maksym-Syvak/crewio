@@ -1,5 +1,10 @@
 import { api } from './client';
-import type { Employee, PaginatedResponse, Restaurant } from '@/types';
+import type {
+  Employee,
+  EmployeeProfile,
+  PaginatedResponse,
+  Restaurant,
+} from '@/types';
 
 export const employeesApi = {
   me: () =>
@@ -15,4 +20,7 @@ export const employeesApi = {
         params: { restaurantId, page, limit },
       })
       .then((r) => r.data),
+
+  profile: (employeeId: string) =>
+    api.get<EmployeeProfile>(`/employees/${employeeId}/profile`).then((r) => r.data),
 };

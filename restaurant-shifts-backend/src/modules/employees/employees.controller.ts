@@ -37,9 +37,26 @@ export class EmployeesController {
     return this.employeesService.findMembership(req.user.sub);
   }
 
+  @Get(':id/profile')
+  async getProfile(
+    @Req() req: { user: { sub: string; role: string } },
+    @Param('id') id: string,
+  ) {
+    return this.employeesService.getProfile(id, req.user.sub, req.user.role);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.employeesService.findOne(id);
+  async findOne(
+    @Req() req: { user: { sub: string; role: string } },
+    @Param('id') id: string,
+  ) {
+    const employee = await this.employeesService.findOne(id);
+    await this.employeesService.assertCanViewRestaurantStaff(
+      req.user.sub,
+      req.user.role,
+      employee.restaurant_id,
+    );
+    return employee;
   }
 
   @Roles('owner', 'admin')

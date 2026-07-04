@@ -1,27 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { statisticsApi } from '@/api/statistics.api';
-import { employeesApi } from '@/api/employees.api';
 import { useAuthStore } from '@/store';
-import type { Employee, Statistics } from '@/types';
+import type { Statistics } from '@/types';
 import { formatMonth } from '@/utils/dates';
 import { PageSkeleton } from '@/components/Skeleton';
-import { isAdminRole } from '@/utils/roles';
 
 export default function StatisticsPage() {
-  const user = useAuthStore((s) => s.user);
   const employee = useAuthStore((s) => s.employee);
-  const restaurant = useAuthStore((s) => s.restaurant);
   const [params] = useSearchParams();
   const employeeId = params.get('employeeId') ?? employee?.id ?? undefined;
   const month = formatMonth();
   const [stats, setStats] = useState<Statistics[]>([]);
-  const [staff, setStaff] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const showStaffPicker =
-    !employeeId && Boolean(user && isAdminRole(user.role) && restaurant);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,12 +23,6 @@ export default function StatisticsPage() {
       setError(null);
 
       try {
-        if (showStaffPicker && restaurant) {
-          const list = await employeesApi.list(restaurant.id, 1, 100);
-          if (!cancelled) setStaff(list.data);
-          return;
-        }
-
         if (!employeeId) {
           return;
         }
@@ -56,41 +42,9 @@ export default function StatisticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [employeeId, month, showStaffPicker, restaurant]);
+  }, [employeeId, month]);
 
   if (loading) return <PageSkeleton />;
-
-  if (showStaffPicker) {
-    return (
-      <div className="page">
-        <h1 className="page-title">Статистика персоналу</h1>
-        <p className="mb-4 text-sm text-[var(--tg-hint)]">
-          Оберіть співробітника для перегляду статистики
-        </p>
-        {staff.length === 0 ? (
-          <p className="text-center text-sm text-[var(--tg-hint)]">
-            У закладі ще немає співробітників
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {staff.map((e) => (
-              <li key={e.id}>
-                <Link
-                  to={`/statistics?employeeId=${e.id}`}
-                  className="card flex items-center justify-between"
-                >
-                  <span>
-                    {e.user?.first_name} {e.user?.last_name}
-                  </span>
-                  <span className="text-sm text-[var(--tg-link)]">→</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  }
 
   if (!employeeId) {
     return (
@@ -120,11 +74,6 @@ export default function StatisticsPage() {
 
   return (
     <div className="page">
-      {user && isAdminRole(user.role) && (
-        <Link to="/statistics" className="mb-3 inline-block text-sm text-[var(--tg-link)]">
-          ← Усі співробітники
-        </Link>
-      )}
       <h1 className="page-title">Статистика</h1>
       <p className="mb-4 text-sm text-[var(--tg-hint)]">Місяць: {month}</p>
 

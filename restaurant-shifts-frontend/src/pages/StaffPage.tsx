@@ -4,6 +4,14 @@ import { employeesApi } from '@/api/employees.api';
 import { useAuthStore } from '@/store';
 import type { Employee } from '@/types';
 import { PageSkeleton } from '@/components/Skeleton';
+import { formatShiftShort } from '@/utils/dates';
+import {
+  formatEmployeePhone,
+  formatSalary,
+  getEmployeeStatusLabel,
+  isEmployeeActive,
+  telegramDisplayName,
+} from '@/utils/employees';
 
 const PAGE_SIZE = 20;
 
@@ -99,35 +107,9 @@ export default function StaffPage() {
           {error}
         </p>
       )}
-      <ul className="space-y-2">
+      <ul className="space-y-3">
         {staff.map((e) => (
-          <li key={e.id} className="card flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--tg-button)] text-white">
-              {e.user?.photo_url ? (
-                <img
-                  src={e.user.photo_url}
-                  alt=""
-                  className="h-full w-full rounded-full object-cover"
-                />
-              ) : (
-                e.user?.first_name?.[0] ?? '?'
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-medium">
-                {e.user?.first_name} {e.user?.last_name}
-              </div>
-              <div className="text-xs text-[var(--tg-hint)]">
-                {e.position?.name ?? 'Без посади'} · {e.status}
-              </div>
-            </div>
-            <Link
-              to={`/statistics?employeeId=${e.id}`}
-              className="text-xs text-[var(--tg-link)]"
-            >
-              Статистика
-            </Link>
-          </li>
+          <EmployeeCard key={e.id} employee={e} />
         ))}
       </ul>
       {!loading && staff.length === 0 && !error && (
@@ -141,6 +123,98 @@ export default function StaffPage() {
           Завантаження...
         </p>
       )}
+    </div>
+  );
+}
+
+function EmployeeCard({ employee }: { employee: Employee }) {
+  const user = employee.user;
+  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ');
+  const phone = formatEmployeePhone(employee.phone, user?.phone);
+  const position = employee.position?.name ?? 'Без посади';
+  const statusLabel = getEmployeeStatusLabel(employee.status);
+  const active = isEmployeeActive(employee.status);
+  const telegram = telegramDisplayName(user?.username);
+  const summary = employee.summary;
+
+  return (
+    <li className="card space-y-3">
+      <div className="flex items-start gap-3">
+        <Avatar photoUrl={user?.photo_url} name={user?.first_name} />
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">{fullName || 'Без імені'}</div>
+          <div className="mt-1 text-sm text-[var(--tg-hint)]">📞 {phone}</div>
+          <div className="mt-0.5 text-sm">👩‍🍳 {position}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span
+              className={`rounded-full px-2 py-0.5 ${
+                active
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-[var(--tg-hint)]/15 text-[var(--tg-hint)]'
+              }`}
+            >
+              {statusLabel}
+            </span>
+            {telegram ? (
+              <span className="text-[var(--tg-link)]">{telegram}</span>
+            ) : (
+              <span className="text-[var(--tg-hint)]">Telegram без username</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-1 border-t border-[var(--tg-hint)]/10 pt-3 text-sm">
+        <Row
+          label="Наступна зміна"
+          value={
+            summary?.next_shift_start
+              ? formatShiftShort(summary.next_shift_start)
+              : '—'
+          }
+        />
+        <Row
+          label="Змін цього місяця"
+          value={String(summary?.booked_shifts_month ?? 0)}
+        />
+        <Row
+          label="Очікувана зарплата"
+          value={formatSalary(summary?.planned_salary ?? 0)}
+        />
+      </div>
+
+      <Link
+        to={`/staff/${employee.id}`}
+        className="btn-secondary block text-center"
+      >
+        Відкрити профіль
+      </Link>
+    </li>
+  );
+}
+
+function Avatar({ photoUrl, name }: { photoUrl?: string; name?: string }) {
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt=""
+        className="h-14 w-14 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--tg-button)] text-lg text-white">
+      {name?.[0] ?? '?'}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[var(--tg-hint)]">{label}</span>
+      <span className="font-medium">{value}</span>
     </div>
   );
 }

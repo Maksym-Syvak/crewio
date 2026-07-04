@@ -3,7 +3,6 @@ import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
-import { LoginPasswordDto } from './dto/login-password.dto';
 import { DevLoginDto } from './dto/dev-login.dto';
 import { RefreshDto, LogoutDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -41,11 +40,6 @@ export class AuthController {
   @Post('refresh')
   refresh(@Body() dto: RefreshDto) {
     return this.authService.refreshSession(dto.refreshToken);
-  }
-
-  @Post('login-password')
-  loginPassword(@Body() dto: LoginPasswordDto) {
-    return this.authService.loginWithPassword(dto);
   }
 
   @Post('dev-login')

@@ -44,14 +44,11 @@ interface OnboardingState {
   inviteCode: string;
   profileSubmitted: boolean;
 
-  pendingPassword: string | null;
-
   setCurrentStep: (step: OnboardingStep) => void;
   setSelectedRole: (role: UserRole) => void;
   setProfileData: (data: ProfileData) => void;
   setRestaurantData: (data: Partial<CreateRestaurantPayload>) => void;
   setInviteCode: (code: string) => void;
-  setPendingPassword: (password: string | null) => void;
   markProfileSubmitted: () => void;
   reset: () => void;
 }
@@ -63,7 +60,6 @@ const initialState = {
   restaurantData: null as Partial<CreateRestaurantPayload> | null,
   inviteCode: '',
   profileSubmitted: false,
-  pendingPassword: null as string | null,
 };
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -79,7 +75,6 @@ export const useOnboardingStore = create<OnboardingState>()(
           restaurantData: { ...(s.restaurantData ?? {}), ...data },
         })),
       setInviteCode: (code) => set({ inviteCode: code }),
-      setPendingPassword: (password) => set({ pendingPassword: password }),
       markProfileSubmitted: () => set({ profileSubmitted: true }),
       reset: () => set({ ...initialState }),
     }),
@@ -192,8 +187,7 @@ export function getPostLoginPath(): string {
 
 export async function ensureOnboardingProfileComplete() {
   const { user, completeProfile } = useAuthStore.getState();
-  const { profileData, selectedRole, pendingPassword } =
-    useOnboardingStore.getState();
+  const { profileData, selectedRole } = useOnboardingStore.getState();
 
   if (!profileData || !selectedRole) {
     throw new Error('Спочатку заповніть профіль');
@@ -204,15 +198,12 @@ export async function ensureOnboardingProfileComplete() {
     user.role !== selectedRole ||
     user.first_name !== profileData.first_name ||
     user.last_name !== profileData.last_name ||
-    user.phone !== profileData.phone ||
-    (!user.has_password && pendingPassword);
+    user.phone !== profileData.phone;
 
   if (needsSync) {
     await completeProfile({
       ...profileData,
       role: selectedRole,
-      password: pendingPassword ?? undefined,
-      password_confirm: pendingPassword ?? undefined,
     });
   }
 }

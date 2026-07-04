@@ -37,8 +37,7 @@ function isAuthEndpoint(url?: string) {
     url.includes('/auth/register') ||
     url.includes('/auth/refresh') ||
     url.includes('/auth/check-user') ||
-    url.includes('/auth/dev-login') ||
-    url.includes('/auth/login-password')
+    url.includes('/auth/dev-login')
   );
 }
 

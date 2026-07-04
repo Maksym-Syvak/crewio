@@ -17,6 +17,10 @@ export function formatTime(iso: string) {
   return dayjs(iso).format('HH:mm');
 }
 
+export function formatShiftShort(iso: string) {
+  return dayjs(iso).format('DD.MM HH:mm');
+}
+
 export function formatMonth(month?: string) {
   return dayjs(month ?? undefined).format('YYYY-MM');
 }

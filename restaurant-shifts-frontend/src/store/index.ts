@@ -50,7 +50,6 @@ interface AuthState {
   restoreAccount: () => Promise<void>;
   recreateAccount: () => Promise<void>;
   checkUser: () => Promise<CheckUserResponse>;
-  loginWithPassword: (login: string, password: string) => Promise<void>;
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
   loadContext: () => Promise<void>;
@@ -195,27 +194,6 @@ export const useAuthStore = create<AuthState>()(
           throw new Error('Відкрийте застосунок у Telegram');
         }
         return authApi.checkUser(initData);
-      },
-
-      loginWithPassword: async (login, password) => {
-        set({ isLoading: true, error: null });
-        try {
-          const res = await authApi.loginPassword(login, password);
-          set(sessionFromAuth(res));
-          await get().loadContext().catch(() => undefined);
-        } catch (e) {
-          set({
-            error: getErrorMessage(e),
-            isAuthenticated: false,
-            token: null,
-            refreshToken: null,
-            tokenExpiresAt: null,
-            user: null,
-          });
-          throw e;
-        } finally {
-          set({ isLoading: false });
-        }
       },
 
       devLogin: async (telegramId: string) => {

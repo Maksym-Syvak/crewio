@@ -11,21 +11,11 @@ import {
   useOnboardingStore,
 } from '@/store/onboarding';
 
-const schema = z
-  .object({
-    first_name: z.string().min(1, "Вкажіть ім'я"),
-    last_name: z.string().min(1, 'Вкажіть прізвище'),
-    phone: z.string().min(10, 'Вкажіть номер телефону'),
-    password: z.string().min(6, 'Мінімум 6 символів').max(64).optional().or(z.literal('')),
-    password_confirm: z.string().optional().or(z.literal('')),
-  })
-  .refine(
-    (data) => {
-      if (!data.password && !data.password_confirm) return true;
-      return data.password === data.password_confirm;
-    },
-    { message: 'Паролі не співпадають', path: ['password_confirm'] },
-  );
+const schema = z.object({
+  first_name: z.string().min(1, "Вкажіть ім'я"),
+  last_name: z.string().min(1, 'Вкажіть прізвище'),
+  phone: z.string().min(10, 'Вкажіть номер телефону'),
+});
 
 type FormData = z.infer<typeof schema>;
 
@@ -35,10 +25,8 @@ export default function CompleteProfilePage() {
   const profileData = useOnboardingStore((s) => s.profileData);
   const selectedRole = useOnboardingStore((s) => s.selectedRole);
   const setProfileData = useOnboardingStore((s) => s.setProfileData);
-  const setPendingPassword = useOnboardingStore((s) => s.setPendingPassword);
   const markProfileSubmitted = useOnboardingStore((s) => s.markProfileSubmitted);
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
-  const needsPassword = !user?.has_password;
 
   const {
     register,
@@ -51,8 +39,6 @@ export default function CompleteProfilePage() {
       first_name: profileData?.first_name ?? user?.first_name ?? '',
       last_name: profileData?.last_name ?? user?.last_name ?? '',
       phone: profileData?.phone ?? user?.phone ?? '',
-      password: '',
-      password_confirm: '',
     },
   });
 
@@ -61,8 +47,6 @@ export default function CompleteProfilePage() {
       first_name: profileData?.first_name ?? user?.first_name ?? '',
       last_name: profileData?.last_name ?? user?.last_name ?? '',
       phone: profileData?.phone ?? user?.phone ?? '',
-      password: '',
-      password_confirm: '',
     });
   }, [profileData, user, reset]);
 
@@ -71,15 +55,11 @@ export default function CompleteProfilePage() {
       navigate(ONBOARDING_PATHS.role);
       return;
     }
-    if (needsPassword && (!data.password || data.password.length < 6)) {
-      return;
-    }
     setProfileData({
       first_name: data.first_name,
       last_name: data.last_name,
       phone: data.phone,
     });
-    setPendingPassword(needsPassword ? data.password! : null);
     markProfileSubmitted();
 
     if (selectedRole === 'employee') {
@@ -133,33 +113,6 @@ export default function CompleteProfilePage() {
             {...register('phone')}
           />
         </Field>
-
-        {needsPassword && (
-          <div className="space-y-3 rounded-xl border border-[color-mix(in_srgb,var(--crew-burgundy)_15%,transparent)] p-4">
-            <h2 className="text-sm font-semibold text-[var(--crew-burgundy)]">
-              Створіть пароль
-            </h2>
-            <p className="text-xs text-[var(--tg-hint)]">
-              Для входу без Telegram (6–64 символи)
-            </p>
-            <Field label="Пароль" error={errors.password?.message}>
-              <input
-                className="field-input"
-                type="password"
-                autoComplete="new-password"
-                {...register('password', { required: needsPassword })}
-              />
-            </Field>
-            <Field label="Повторіть пароль" error={errors.password_confirm?.message}>
-              <input
-                className="field-input"
-                type="password"
-                autoComplete="new-password"
-                {...register('password_confirm', { required: needsPassword })}
-              />
-            </Field>
-          </div>
-        )}
 
         <button type="submit" className="btn-primary" disabled={isSubmitting}>
           Продовжити
