@@ -47,8 +47,33 @@ export function isPartialBooking(booking: ShiftBooking): boolean {
   return booking.booking_type === 'partial';
 }
 
-export function getBookingEmoji(booking: ShiftBooking): string {
-  return isPartialBooking(booking) ? '🟠' : '🟢';
+export function getEmployeeBooking(
+  shift: Shift,
+  employeeId?: string,
+): ShiftBooking | undefined {
+  if (!employeeId) return undefined;
+  return getShiftBookings(shift).find(
+    (b) => b.employee_id === employeeId && b.status !== 'cancelled',
+  );
+}
+
+/** Left accent border — full matches "Моя зміна", partial uses amber */
+export const BOOKING_ACCENT = {
+  full: 'border-l-4 border-l-[var(--crew-green)]',
+  partial: 'border-l-4 border-l-[var(--crew-amber)]',
+} as const;
+
+export const BOOKING_DOT = {
+  full: 'bg-[var(--crew-green)]',
+  partial: 'bg-[var(--crew-amber)]',
+} as const;
+
+export function getBookingAccent(partial: boolean): string {
+  return partial ? BOOKING_ACCENT.partial : BOOKING_ACCENT.full;
+}
+
+export function getBookingDot(partial: boolean): string {
+  return partial ? BOOKING_DOT.partial : BOOKING_DOT.full;
 }
 
 export function getShiftPayLabel(shift: Shift): string | null {

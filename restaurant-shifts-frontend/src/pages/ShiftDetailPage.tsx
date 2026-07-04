@@ -2,27 +2,29 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { shiftsApi } from '@/api/shifts.api';
 import { replacementsApi } from '@/api/replacements.api';
-import { useAuthStore, useToastStore } from '@/store';
+import { BookingRow } from '@/components/BookingRow';
+import {
+  ShiftBookingForm,
+  ShiftBookingStatus,
+  ShiftSlotsInfo,
+} from '@/components/ShiftBookingForm';
+import { useAuthStore, useShiftsStore, useToastStore } from '@/store';
 import { formatDate, formatTime } from '@/utils/dates';
 import { getErrorMessage } from '@/api/client';
 import { isAdminRole } from '@/utils/roles';
 import {
   calculateBookingPayPreview,
   canBookShift,
-  getAvailableSlots,
-  getBookedCount,
-  getBookingEmoji,
-  getBookingTimeRange,
+  getEmployeeBooking,
   getPlannedHours,
   getShiftBookings,
   getShiftPayLabel,
   getShiftStatusLabel,
   isEmployeeBooked,
-  isPartialBooking,
   isShiftFull,
   isShiftUrgent,
 } from '@/utils/shifts';
-import type { BookingType, Shift } from '@/types';
+import type { Shift } from '@/types';
 import { PageSkeleton } from '@/components/Skeleton';
 
 export default function ShiftDetailPage() {
@@ -31,62 +33,30 @@ export default function ShiftDetailPage() {
   const employee = useAuthStore((s) => s.employee);
   const user = useAuthStore((s) => s.user);
   const push = useToastStore((s) => s.push);
+  const upsertShift = useShiftsStore((s) => s.upsertShift);
   const [shift, setShift] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
-  const [bookingType, setBookingType] = useState<BookingType>('full');
-  const [partialStart, setPartialStart] = useState('');
-  const [partialEnd, setPartialEnd] = useState('');
 
   useEffect(() => {
     if (!id) return;
     shiftsApi
       .get(id)
-      .then((s) => {
-        setShift(s);
-        setPartialStart(formatTime(s.start_time));
-        setPartialEnd(formatTime(s.end_time));
-      })
+      .then(setShift)
       .finally(() => setLoading(false));
   }, [id]);
 
   const isAdmin = Boolean(user && isAdminRole(user.role));
-  const booked = shift ? getBookedCount(shift) : 0;
-  const available = shift ? getAvailableSlots(shift) : 0;
   const full = shift ? isShiftFull(shift) : false;
   const isBooked = shift ? isEmployeeBooked(shift, employee?.id) : false;
   const bookings = shift ? getShiftBookings(shift).filter((b) => b.status !== 'cancelled') : [];
   const bookable = shift ? canBookShift(shift) : false;
+  const myBooking = shift ? getEmployeeBooking(shift, employee?.id) : undefined;
 
-  const buildBookPayload = () => {
-    if (!shift || !employee) return null;
-    const base = { employee_id: employee.id, booking_type: bookingType };
-    if (bookingType === 'partial') {
-      const date = shift.shift_date ?? shift.start_time.slice(0, 10);
-      return {
-        ...base,
-        booked_start_time: new Date(`${date}T${partialStart}`).toISOString(),
-        booked_end_time: new Date(`${date}T${partialEnd}`).toISOString(),
-      };
-    }
-    return base;
-  };
-
-  const handleBook = async () => {
-    if (!shift || !employee) return;
-    const payload = buildBookPayload();
-    if (!payload) return;
-
-    setActing(true);
-    try {
-      const updated = await shiftsApi.book(shift.id, payload);
-      setShift(updated);
-      push({ type: 'success', title: 'Зміну заброньовано' });
-    } catch (e) {
-      push({ type: 'error', title: getErrorMessage(e) });
-    } finally {
-      setActing(false);
-    }
+  const handleBooked = (updated: Shift) => {
+    setShift(updated);
+    upsertShift(updated);
+    push({ type: 'success', title: 'Зміну заброньовано' });
   };
 
   const handleDecline = async () => {
@@ -174,7 +144,6 @@ export default function ShiftDetailPage() {
   const hours = getPlannedHours(shift);
   const pay = getShiftPayLabel(shift);
   const isCompleted = shift.status === 'completed';
-  const myBooking = bookings.find((b) => b.employee_id === employee?.id);
 
   return (
     <div className="page">
@@ -197,105 +166,39 @@ export default function ShiftDetailPage() {
         <Row label="Тривалість" value={`${hours.toFixed(1)} год`} />
         {pay && <Row label="Ставка" value={pay} />}
         <Row label="Статус" value={getShiftStatusLabel(shift.status)} />
-        <Row label="Вільно" value={`${available}/${shift.required_employees}`} />
-        <Row label="Заброньовано" value={`${booked}/${shift.required_employees}`} />
+        <ShiftSlotsInfo shift={shift} />
         {isCompleted && myBooking && calculateBookingPayPreview(shift, myBooking) && (
           <Row label="Нараховано" value={calculateBookingPayPreview(shift, myBooking)!} />
         )}
       </dl>
 
       {bookings.length > 0 && (
-        <section className="mt-4">
+        <section className="mt-4 space-y-2">
           <h2 className="mb-2 font-semibold">Забронювали</h2>
-          <ul className="space-y-2">
-            {bookings.map((b) => {
-              const range = getBookingTimeRange(b, shift);
-              return (
-                <li key={b.id} className="card flex items-center gap-3 text-sm">
-                  <span className="text-base">{getBookingEmoji(b)}</span>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--tg-button)] text-white">
-                    {b.employee?.user?.first_name?.[0] ?? '?'}
-                  </div>
-                  <div className="flex-1">
-                    <div>
-                      {b.employee?.user?.first_name} {b.employee?.user?.last_name}
-                    </div>
-                    <div className="text-xs text-[var(--tg-hint)]">
-                      {formatTime(range.start)}–{formatTime(range.end)}
-                      {isPartialBooking(b) ? ' · часткова' : ' · повна'}
-                    </div>
-                  </div>
-                  {isCompleted && calculateBookingPayPreview(shift, b) && (
-                    <div className="text-xs font-medium">{calculateBookingPayPreview(shift, b)}</div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          {bookings.map((b) => (
+            <BookingRow key={b.id} booking={b} shift={shift} showStatus />
+          ))}
         </section>
       )}
 
       <div className="mt-6 space-y-2">
+        <ShiftBookingStatus shift={shift} employeeId={employee?.id} />
+
         {employee && !isBooked && !full && bookable && (
-          <div className="card space-y-3">
-            <h3 className="font-semibold">Тип бронювання</h3>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="booking_type"
-                checked={bookingType === 'full'}
-                onChange={() => setBookingType('full')}
-              />
-              Повна ({formatTime(shift.start_time)}–{formatTime(shift.end_time)})
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="booking_type"
-                checked={bookingType === 'partial'}
-                onChange={() => setBookingType('partial')}
-              />
-              Часткова
-            </label>
-            {bookingType === 'partial' && (
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-sm">
-                  <span className="mb-1 block text-[var(--tg-hint)]">Початок</span>
-                  <input
-                    type="time"
-                    className="w-full rounded-lg bg-[var(--tg-secondary-bg)] p-2"
-                    value={partialStart}
-                    onChange={(e) => setPartialStart(e.target.value)}
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="mb-1 block text-[var(--tg-hint)]">Кінець</span>
-                  <input
-                    type="time"
-                    className="w-full rounded-lg bg-[var(--tg-secondary-bg)] p-2"
-                    value={partialEnd}
-                    onChange={(e) => setPartialEnd(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
-            <button type="button" className="btn-primary" disabled={acting} onClick={handleBook}>
-              Забронювати
-            </button>
+          <div className="card">
+            <ShiftBookingForm
+              shift={shift}
+              employeeId={employee.id}
+              onBooked={handleBooked}
+              onError={(msg) => push({ type: 'error', title: msg })}
+            />
           </div>
         )}
+
         {employee && isBooked && bookable && (
           <button type="button" className="btn-danger" disabled={acting} onClick={handleDecline}>
             Відмовитись
           </button>
-        )}
-        {full && !isBooked && (
-          <p className="text-center text-sm font-medium text-[var(--crew-burgundy)]">Заповнено</p>
-        )}
-        {!bookable && !isCompleted && (
-          <p className="text-center text-sm text-[var(--tg-hint)]">
-            {shift.status === 'active' ? 'Зміна в процесі' : 'Бронювання недоступне'}
-          </p>
         )}
         {isShiftUrgent(shift) && employee && !isBooked && !full && bookable && (
           <button type="button" className="btn-secondary" disabled={acting} onClick={handleApplyReplacement}>

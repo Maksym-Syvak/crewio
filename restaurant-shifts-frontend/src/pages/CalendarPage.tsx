@@ -1,25 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useShiftsStore } from '@/store';
-import { dayjs, formatTime } from '@/utils/dates';
+import { BookingRow } from '@/components/BookingRow';
+import { ShiftModal } from '@/components/ShiftModal';
+import { dayjs } from '@/utils/dates';
 import type { Shift, ShiftBooking } from '@/types';
 import { cn } from '@/utils/cn';
+import { isAdminRole } from '@/utils/roles';
 import {
-  getBookingEmoji,
-  getBookingTimeRange,
+  getAvailableSlots,
+  getEmployeeBooking,
   getShiftBookings,
   isEmployeeBooked,
+  isPartialBooking,
   isShiftUrgent,
 } from '@/utils/shifts';
 
 export default function CalendarPage() {
-  const navigate = useNavigate();
   const employee = useAuthStore((s) => s.employee);
+  const user = useAuthStore((s) => s.user);
   const restaurant = useAuthStore((s) => s.restaurant);
   const shifts = useShiftsStore((s) => s.shifts);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
+  const upsertShift = useShiftsStore((s) => s.upsertShift);
   const [month, setMonth] = useState(dayjs());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+
+  const isAdmin = Boolean(user && isAdminRole(user.role));
 
   useEffect(() => {
     if (restaurant) fetchShifts(restaurant.id);
@@ -46,9 +53,9 @@ export default function CalendarPage() {
     return map;
   }, [shifts]);
 
+  const dayShifts = selectedDay ? (shiftsByDay.get(selectedDay) ?? []) : [];
+
   const dayBookings = useMemo(() => {
-    if (!selectedDay) return [];
-    const dayShifts = shiftsByDay.get(selectedDay) ?? [];
     const items: { booking: ShiftBooking; shift: Shift }[] = [];
     for (const shift of dayShifts) {
       for (const booking of getShiftBookings(shift).filter((b) => b.status !== 'cancelled')) {
@@ -56,26 +63,51 @@ export default function CalendarPage() {
       }
     }
     return items.sort((a, b) => {
-      const aStart = getBookingTimeRange(a.booking, a.shift).start;
-      const bStart = getBookingTimeRange(b.booking, b.shift).start;
-      return aStart.localeCompare(bStart);
+      const aStart = a.booking.booked_start_time ?? a.shift.start_time;
+      const bStart = b.booking.booked_start_time ?? b.shift.start_time;
+      return String(aStart).localeCompare(String(bStart));
     });
-  }, [selectedDay, shiftsByDay]);
+  }, [dayShifts]);
 
   const getDayVariant = (date: dayjs.Dayjs) => {
     const key = date.format('YYYY-MM-DD');
-    const dayShifts = shiftsByDay.get(key) ?? [];
-    if (!dayShifts.length) return 'dayoff';
-    if (dayShifts.some((s) => isShiftUrgent(s))) return 'urgent';
-    if (dayShifts.some((s) => isEmployeeBooked(s, employee?.id))) return 'mine';
-    return 'available';
+    const shiftsOnDay = shiftsByDay.get(key) ?? [];
+    if (!shiftsOnDay.length) return 'dayoff';
+
+    const myBooking = shiftsOnDay
+      .map((s) => getEmployeeBooking(s, employee?.id))
+      .find(Boolean);
+
+    if (myBooking) {
+      return isPartialBooking(myBooking) ? 'minePartial' : 'mine';
+    }
+    if (shiftsOnDay.some((s) => isShiftUrgent(s))) return 'urgent';
+    if (shiftsOnDay.some((s) => getAvailableSlots(s) > 0)) return 'available';
+    return 'dayoff';
   };
 
   const dotColor = {
     mine: 'bg-[var(--crew-green)]',
+    minePartial: 'bg-[var(--crew-amber)]',
     available: 'bg-[var(--crew-blue)]',
     urgent: 'bg-[var(--crew-red)]',
     dayoff: 'bg-[var(--crew-gray)]',
+  };
+
+  const getShiftVariant = (shift: Shift) => {
+    const myBooking = getEmployeeBooking(shift, employee?.id);
+    if (myBooking) return isPartialBooking(myBooking) ? ('minePartial' as const) : ('mine' as const);
+    if (isShiftUrgent(shift)) return 'urgent' as const;
+    if (getAvailableSlots(shift) === 0) return 'dayoff' as const;
+    return 'available' as const;
+  };
+
+  const shiftCardVariant = {
+    mine: 'border-l-4 border-l-[var(--crew-green)]',
+    minePartial: 'border-l-4 border-l-[var(--crew-amber)]',
+    available: 'border-l-4 border-l-[var(--crew-burgundy-light)]',
+    urgent: 'border-l-4 border-l-[var(--crew-crimson)]',
+    dayoff: 'border-l-4 border-l-[var(--crew-gray)] opacity-70',
   };
 
   return (
@@ -88,9 +120,7 @@ export default function CalendarPage() {
         >
           ‹
         </button>
-        <h1 className="text-lg font-bold capitalize">
-          {month.format('MMMM YYYY')}
-        </h1>
+        <h1 className="text-lg font-bold capitalize">{month.format('MMMM YYYY')}</h1>
         <button
           type="button"
           className="text-[var(--tg-link)]"
@@ -110,7 +140,7 @@ export default function CalendarPage() {
         {days.map((d) => {
           const variant = getDayVariant(d);
           const key = d.format('YYYY-MM-DD');
-          const dayShifts = shiftsByDay.get(key) ?? [];
+          const shiftsOnDay = shiftsByDay.get(key) ?? [];
           const inMonth = d.month() === month.month();
           const selected = selectedDay === key;
 
@@ -127,10 +157,8 @@ export default function CalendarPage() {
               onClick={() => setSelectedDay(key)}
             >
               {d.date()}
-              {dayShifts.length > 0 && (
-                <span
-                  className={cn('mt-0.5 h-1.5 w-1.5 rounded-full', dotColor[variant])}
-                />
+              {shiftsOnDay.length > 0 && (
+                <span className={cn('mt-0.5 h-1.5 w-1.5 rounded-full', dotColor[variant])} />
               )}
             </button>
           );
@@ -138,55 +166,89 @@ export default function CalendarPage() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs">
-        <Legend color="bg-[var(--crew-green)]" label="Моя зміна" />
-        <Legend color="bg-[var(--crew-blue)]" label="Доступна" />
-        <Legend color="bg-[var(--crew-red)]" label="Термінова" />
-        <Legend emoji="🟢" label="Повна" />
-        <Legend emoji="🟠" label="Часткова" />
+        <Legend color={dotColor.mine} label="Моя зміна (повна)" />
+        <Legend color={dotColor.minePartial} label="Моя зміна (часткова)" />
+        <Legend color={dotColor.available} label="Доступна" />
+        <Legend color={dotColor.urgent} label="Термінова" />
       </div>
 
       {selectedDay && (
-        <section className="card mt-4">
-          <h2 className="mb-3 font-semibold">{dayjs(selectedDay).format('DD.MM.YYYY')}</h2>
-          {dayBookings.length === 0 ? (
-            <p className="text-sm text-[var(--tg-hint)]">
-              {(shiftsByDay.get(selectedDay) ?? []).length > 0
-                ? 'Немає бронювань — зміни доступні для запису'
-                : 'Вихідний'}
-            </p>
+        <section className="mt-4 space-y-4">
+          <h2 className="font-semibold">{dayjs(selectedDay).format('DD.MM.YYYY')}</h2>
+
+          {dayShifts.length === 0 ? (
+            <p className="text-sm text-[var(--tg-hint)]">Вихідний</p>
           ) : (
-            <ul className="space-y-2">
-              {dayBookings.map(({ booking, shift }) => {
-                const range = getBookingTimeRange(booking, shift);
-                const name = `${booking.employee?.user?.first_name ?? ''} ${booking.employee?.user?.last_name ?? ''}`.trim();
-                return (
-                  <li key={booking.id}>
+            <>
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-[var(--tg-hint)]">Зміни</h3>
+                {dayShifts.map((shift) => {
+                  const variant = getShiftVariant(shift);
+                  const booked = isEmployeeBooked(shift, employee?.id);
+                  return (
                     <button
+                      key={shift.id}
                       type="button"
-                      className="flex w-full items-center gap-2 rounded-lg bg-[var(--tg-secondary-bg)] px-3 py-2 text-left text-sm"
-                      onClick={() => navigate(`/shifts/${shift.id}`)}
+                      className="w-full text-left"
+                      onClick={() => setSelectedShift(shift)}
                     >
-                      <span>{getBookingEmoji(booking)}</span>
-                      <span className="font-medium">{name || 'Працівник'}</span>
-                      <span className="ml-auto text-[var(--tg-hint)]">
-                        {formatTime(range.start)}–{formatTime(range.end)}
-                      </span>
+                      <div className={cn('card', shiftCardVariant[variant])}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold">{shift.shift_type || 'Зміна'}</span>
+                          {booked && (
+                            <span className="text-xs font-medium text-[var(--crew-green)]">
+                              Ваша зміна
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-sm text-[var(--tg-hint)]">
+                          {dayjs(shift.start_time).format('HH:mm')}–
+                          {dayjs(shift.end_time).format('HH:mm')}
+                          {' · '}
+                          Вільно: {getAvailableSlots(shift)}/{shift.required_employees}
+                        </div>
+                      </div>
                     </button>
-                  </li>
-                );
-              })}
-            </ul>
+                  );
+                })}
+              </div>
+
+              {isAdmin && dayBookings.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-[var(--tg-hint)]">Персонал</h3>
+                  {dayBookings.map(({ booking, shift }) => (
+                    <BookingRow
+                      key={booking.id}
+                      booking={booking}
+                      shift={shift}
+                      onClick={() => setSelectedShift(shift)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </section>
+      )}
+
+      {selectedShift && (
+        <ShiftModal
+          shift={selectedShift}
+          onClose={() => setSelectedShift(null)}
+          onUpdated={(updated) => {
+            upsertShift(updated);
+            setSelectedShift(updated);
+          }}
+        />
       )}
     </div>
   );
 }
 
-function Legend({ color, label, emoji }: { color?: string; label: string; emoji?: string }) {
+function Legend({ color, label }: { color: string; label: string }) {
   return (
     <span className="flex items-center gap-1">
-      {emoji ? <span>{emoji}</span> : <span className={cn('h-2 w-2 rounded-full', color)} />}
+      <span className={cn('h-2 w-2 rounded-full', color)} />
       {label}
     </span>
   );

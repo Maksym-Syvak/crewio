@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore, useShiftsStore } from '@/store';
 import { ShiftCard } from '@/components/ShiftCard';
+import { ShiftModal } from '@/components/ShiftModal';
 import { PageSkeleton } from '@/components/Skeleton';
 import type { Shift } from '@/types';
 import { isAdminRole } from '@/utils/roles';
 import {
   getAvailableSlots,
+  getEmployeeBooking,
   isEmployeeBooked,
+  isPartialBooking,
   isShiftFull,
 } from '@/utils/shifts';
 
@@ -21,10 +24,12 @@ export default function ShiftsPage() {
   const shifts = useShiftsStore((s) => s.shifts);
   const isLoading = useShiftsStore((s) => s.isLoading);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
+  const upsertShift = useShiftsStore((s) => s.upsertShift);
 
   const isAdmin = Boolean(user && isAdminRole(user.role));
   const [tab, setTab] = useState<Tab>(isAdmin ? 'all' : 'available');
   const [sort, setSort] = useState<SortKey>('date_asc');
+  const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
 
   useEffect(() => {
     if (restaurant) fetchShifts(restaurant.id);
@@ -50,7 +55,10 @@ export default function ShiftsPage() {
 
   const getVariant = (s: Shift) => {
     if (s.is_urgent || s.status === 'urgent') return 'urgent' as const;
-    if (isEmployeeBooked(s, employee?.id)) return 'mine' as const;
+    const myBooking = getEmployeeBooking(s, employee?.id);
+    if (myBooking) {
+      return isPartialBooking(myBooking) ? ('minePartial' as const) : ('mine' as const);
+    }
     if (getAvailableSlots(s) === 0) return 'dayoff' as const;
     return 'available' as const;
   };
@@ -102,7 +110,12 @@ export default function ShiftsPage() {
 
       <div className="space-y-2">
         {filtered.map((s) => (
-          <ShiftCard key={s.id} shift={s} variant={getVariant(s)} />
+          <ShiftCard
+            key={s.id}
+            shift={s}
+            variant={getVariant(s)}
+            onClick={() => setSelectedShift(s)}
+          />
         ))}
         {filtered.length === 0 && (
           <p className="text-center text-sm text-[var(--tg-hint)]">
@@ -110,6 +123,17 @@ export default function ShiftsPage() {
           </p>
         )}
       </div>
+
+      {selectedShift && (
+        <ShiftModal
+          shift={selectedShift}
+          onClose={() => setSelectedShift(null)}
+          onUpdated={(updated) => {
+            upsertShift(updated);
+            setSelectedShift(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

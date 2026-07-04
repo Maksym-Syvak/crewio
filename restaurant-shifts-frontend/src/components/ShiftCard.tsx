@@ -11,12 +11,13 @@ import { cn } from '@/utils/cn';
 
 interface Props {
   shift: Shift;
-  variant?: 'mine' | 'available' | 'urgent' | 'dayoff';
+  variant?: 'mine' | 'minePartial' | 'available' | 'urgent' | 'dayoff';
   onClick?: () => void;
 }
 
 const variantStyles = {
   mine: 'border-l-4 border-l-[var(--crew-green)]',
+  minePartial: 'border-l-4 border-l-[var(--crew-amber)]',
   available: 'border-l-4 border-l-[var(--crew-burgundy-light)]',
   urgent: 'border-l-4 border-l-[var(--crew-crimson)]',
   dayoff: 'border-l-4 border-l-[var(--crew-gray)] opacity-70',
