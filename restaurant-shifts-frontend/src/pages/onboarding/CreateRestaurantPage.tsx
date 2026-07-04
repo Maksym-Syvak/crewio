@@ -16,6 +16,7 @@ import {
   RESTAURANT_TYPES,
   RESTAURANT_TYPE_LABELS,
 } from '@/utils/restaurant-types';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 
 const schema = z.object({
   name: z.string().min(1, 'Вкажіть назву'),
@@ -75,6 +76,7 @@ export default function CreateRestaurantPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isAppFlow = location.pathname.includes('/restaurants/create');
+  const keyboardInset = useKeyboardInset();
   const user = useAuthStore((s) => s.user);
   const createRestaurant = useAuthStore((s) => s.createRestaurant);
   const push = useToastStore((s) => s.push);
@@ -95,6 +97,12 @@ export default function CreateRestaurantPage() {
       close_time: '22:00',
     },
   });
+
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    tg?.disableVerticalSwipes?.();
+    return () => tg?.enableVerticalSwipes?.();
+  }, []);
 
   useEffect(() => {
     const hydrate = () => {
@@ -144,151 +152,91 @@ export default function CreateRestaurantPage() {
   };
 
   const submitLabel = isAppFlow ? 'Додати заклад' : 'Створити заклад';
+  const bottomInset = isAppFlow ? 96 : 24;
 
   return (
     <div
-      className={`create-restaurant-shell${isAppFlow ? ' create-restaurant-shell--with-nav' : ''}`}
+      className={`create-restaurant-page${isAppFlow ? ' create-restaurant-page--app' : ''}`}
+      style={{
+        paddingBottom: `calc(${bottomInset}px + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`,
+      }}
     >
-      <div className="create-restaurant-scroll">
-        <h1 className="page-title">Створення закладу</h1>
+      <h1 className="page-title">Створення закладу</h1>
 
-        <form
-          id="create-restaurant-form"
-          onSubmit={handleSubmit(onSubmit)}
-          className="space-y-4"
-        >
-          <Section title="Основна інформація">
-            <Field label="Назва закладу" error={errors.name?.message}>
-              <input className="field-input" {...register('name')} />
+      <form onSubmit={handleSubmit(onSubmit)} className="create-restaurant-form space-y-4">
+        <Section title="Основна інформація">
+          <Field label="Назва закладу" error={errors.name?.message}>
+            <input className="field-input" {...register('name')} />
+          </Field>
+          <Field label="Тип закладу" error={errors.type?.message}>
+            <select className="field-input" {...register('type')}>
+              <option value="">Оберіть...</option>
+              {RESTAURANT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {RESTAURANT_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Адреса">
+            <input className="field-input" {...register('address')} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Місто" error={errors.city?.message}>
+              <input className="field-input" {...register('city')} />
             </Field>
-            <Field label="Тип закладу" error={errors.type?.message}>
-              <select className="field-input" {...register('type')}>
-                <option value="">Оберіть...</option>
-                {RESTAURANT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {RESTAURANT_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
+            <Field label="Область" error={errors.region?.message}>
+              <input className="field-input" {...register('region')} />
             </Field>
-            <Field label="Адреса">
-              <input className="field-input" {...register('address')} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Місто" error={errors.city?.message}>
-                <input className="field-input" {...register('city')} />
-              </Field>
-              <Field label="Область" error={errors.region?.message}>
-                <input className="field-input" {...register('region')} />
-              </Field>
-            </div>
-            <Field label="Країна" error={errors.country?.message}>
-              <input className="field-input" {...register('country')} />
-            </Field>
-          </Section>
+          </div>
+          <Field label="Країна" error={errors.country?.message}>
+            <input className="field-input" {...register('country')} />
+          </Field>
+        </Section>
 
-          <Section title="Контакти">
-            <Field label="Телефон (необов'язково)">
-              <input className="field-input" type="tel" {...register('phone')} />
-            </Field>
-            <Field label="Email (необов'язково)" error={errors.email?.message}>
-              <input className="field-input" type="email" {...register('email')} />
-            </Field>
-            <Field label="Сайт (необов'язково)">
-              <input className="field-input" {...register('website')} />
-            </Field>
-          </Section>
+        <Section title="Контакти">
+          <Field label="Телефон (необов'язково)">
+            <input className="field-input" type="tel" {...register('phone')} />
+          </Field>
+          <Field label="Email (необов'язково)" error={errors.email?.message}>
+            <input className="field-input" type="email" {...register('email')} />
+          </Field>
+          <Field label="Сайт (необов'язково)">
+            <input className="field-input" {...register('website')} />
+          </Field>
+        </Section>
 
-          <Section title="Робочий час">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Відкриття" error={errors.open_time?.message}>
-                <input className="field-input" type="time" {...register('open_time')} />
-              </Field>
-              <Field label="Закриття" error={errors.close_time?.message}>
-                <input className="field-input" type="time" {...register('close_time')} />
-              </Field>
-            </div>
-            <Field
-              label="Кількість працівників"
-              error={errors.employees_limit?.message}
-            >
-              <input
-                className="field-input"
-                type="number"
-                min={1}
-                inputMode="numeric"
-                {...register('employees_limit')}
-              />
+        <Section title="Робочий час">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Відкриття" error={errors.open_time?.message}>
+              <input className="field-input" type="time" {...register('open_time')} />
             </Field>
-          </Section>
-        </form>
-      </div>
+            <Field label="Закриття" error={errors.close_time?.message}>
+              <input className="field-input" type="time" {...register('close_time')} />
+            </Field>
+          </div>
+          <Field
+            label="Кількість працівників"
+            error={errors.employees_limit?.message}
+          >
+            <input
+              className="field-input"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              {...register('employees_limit')}
+            />
+          </Field>
+        </Section>
 
-      <div className="create-restaurant-footer">
         <button
           type="submit"
-          form="create-restaurant-form"
-          className="btn-primary"
+          className="btn-primary create-restaurant-submit"
           disabled={isSubmitting}
         >
           {isSubmitting ? '...' : submitLabel}
         </button>
-      </div>
-
-      <style>{`
-        .create-restaurant-shell {
-          display: flex;
-          flex-direction: column;
-          min-height: 100%;
-          min-height: 100dvh;
-          background: var(--tg-bg);
-        }
-
-        .create-restaurant-scroll {
-          flex: 1;
-          overflow-y: auto;
-          overscroll-behavior: contain;
-          -webkit-overflow-scrolling: touch;
-          padding: 16px 16px 8px;
-        }
-
-        .create-restaurant-footer {
-          flex-shrink: 0;
-          position: sticky;
-          bottom: 0;
-          z-index: 20;
-          padding: 12px 16px;
-          padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-          border-top: 1px solid color-mix(in srgb, var(--crew-burgundy) 12%, transparent);
-          background: var(--tg-bg);
-        }
-
-        .create-restaurant-shell--with-nav .create-restaurant-scroll {
-          padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-        }
-
-        .create-restaurant-shell--with-nav .create-restaurant-footer {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-          max-width: 32rem;
-          margin: 0 auto;
-          box-shadow: 0 -4px 16px rgb(0 0 0 / 6%);
-        }
-
-        .field-input {
-          box-sizing: border-box;
-          width: 100%;
-          min-height: 44px;
-          border-radius: 10px;
-          background: var(--tg-secondary-bg);
-          padding: 12px;
-          border: 1px solid color-mix(in srgb, var(--crew-burgundy) 15%, transparent);
-          color: var(--tg-text);
-          font-size: 16px;
-        }
-      `}</style>
+      </form>
     </div>
   );
 }
@@ -312,7 +260,7 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div>
+    <div className="create-restaurant-field">
       <label className="mb-1 block text-sm">{label}</label>
       {children}
       {error && <p className="mt-1 text-xs text-[var(--crew-crimson)]">{error}</p>}
