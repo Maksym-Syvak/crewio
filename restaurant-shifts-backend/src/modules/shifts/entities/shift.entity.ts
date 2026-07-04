@@ -50,7 +50,7 @@ export class Shift {
   @Column({ default: 0 })
   booked_employees: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   shift_type: string | null;
 
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
@@ -63,7 +63,7 @@ export class Shift {
   is_urgent: boolean;
 
   /** @deprecated Shifts are open pool — no position required */
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   position_id: string | null;
 
   @ManyToOne(() => Position, (position) => position.shifts, {
