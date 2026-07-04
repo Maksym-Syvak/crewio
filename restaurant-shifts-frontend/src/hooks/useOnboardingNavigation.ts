@@ -5,7 +5,7 @@ import {
   pathToStep,
   useOnboardingStore,
 } from '@/store/onboarding';
-import { clearAppSession } from '@/utils/session';
+import { logoutAppSession } from '@/utils/session';
 
 export function useOnboardingNavigation() {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ export function useOnboardingNavigation() {
   }, [backPath, navigate]);
 
   const cancelRegistration = useCallback(async () => {
-    await clearAppSession();
+    await logoutAppSession();
     navigate('/login', { replace: true });
   }, [navigate]);
 

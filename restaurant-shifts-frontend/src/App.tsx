@@ -12,6 +12,7 @@ import { connectSocket, disconnectSocket } from '@/sockets/events';
 import { initTelegramApp } from '@/services/telegram';
 import SplashPage from '@/pages/SplashPage';
 import LoginPage from '@/pages/LoginPage';
+import SwitchTelegramAccountPage from '@/pages/SwitchTelegramAccountPage';
 
 const HomePage = lazy(() => import('@/pages/HomePage'));
 const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
@@ -90,6 +91,7 @@ function AppBootstrap() {
       <Routes>
         <Route path="/splash" element={<SplashPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/login/switch-telegram" element={<SwitchTelegramAccountPage />} />
 
         <Route
           element={

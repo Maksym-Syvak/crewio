@@ -4,7 +4,10 @@ import { useAuthStore, useToastStore } from '@/store';
 import { ROLE_LABELS, canManageStaff } from '@/utils/roles';
 import { LogoutModal } from '@/components/LogoutModal';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
-import { clearAppSession } from '@/utils/session';
+import {
+  logoutAppSession,
+  prepareTelegramAccountSwitch,
+} from '@/utils/session';
 import { ONBOARDING_PATHS } from '@/store/onboarding';
 import { usersApi } from '@/api/users.api';
 import { getErrorMessage } from '@/api/client';
@@ -17,13 +20,14 @@ export default function ProfilePage() {
   const push = useToastStore((s) => s.push);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [switchLoading, setSwitchLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const handleLogoutConfirm = async () => {
     setLogoutLoading(true);
     try {
-      await clearAppSession();
+      await logoutAppSession();
       navigate('/login', { replace: true });
     } finally {
       setLogoutLoading(false);
@@ -31,11 +35,21 @@ export default function ProfilePage() {
     }
   };
 
+  const handleSwitchTelegramAccount = async () => {
+    setSwitchLoading(true);
+    try {
+      await prepareTelegramAccountSwitch();
+      navigate('/login/switch-telegram', { replace: true });
+    } finally {
+      setSwitchLoading(false);
+    }
+  };
+
   const handleDeleteConfirm = async (confirmDeleteRestaurant?: boolean) => {
     setDeleteLoading(true);
     try {
       await usersApi.deleteMe(confirmDeleteRestaurant);
-      await clearAppSession();
+      await logoutAppSession();
       push({ type: 'success', title: 'Акаунт видалено' });
       navigate('/login', { replace: true });
     } catch (e) {
@@ -112,12 +126,10 @@ export default function ProfilePage() {
         <button
           type="button"
           className="btn-secondary"
-          onClick={async () => {
-            await clearAppSession();
-            navigate('/login', { replace: true });
-          }}
+          disabled={switchLoading}
+          onClick={handleSwitchTelegramAccount}
         >
-          Увійти під іншим акаунтом
+          {switchLoading ? 'Очищення...' : 'Змінити Telegram-акаунт'}
         </button>
       </div>
 

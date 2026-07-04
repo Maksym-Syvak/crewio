@@ -6,14 +6,17 @@ import { isTelegramEnv } from '@/services/telegram';
 import { getPostLoginPath } from '@/store/onboarding';
 import { RestoreAccountModal } from '@/components/RestoreAccountModal';
 import { CreateNewAccountModal } from '@/components/CreateNewAccountModal';
+import {
+  beginFreshTelegramAuth,
+  isAwaitingTelegramSwitch,
+  shouldSkipAutoAuth,
+} from '@/utils/session';
 
 export default function AuthLandingPage() {
   const navigate = useNavigate();
-  const login = useAuthStore((s) => s.login);
-  const register = useAuthStore((s) => s.register);
+  const telegramAutoAuth = useAuthStore((s) => s.telegramAutoAuth);
   const restoreAccount = useAuthStore((s) => s.restoreAccount);
   const recreateAccount = useAuthStore((s) => s.recreateAccount);
-  const checkUser = useAuthStore((s) => s.checkUser);
   const devLogin = useAuthStore((s) => s.devLogin);
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
@@ -24,6 +27,13 @@ export default function AuthLandingPage() {
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [createNewOpen, setCreateNewOpen] = useState(false);
   const [autoAuthStarted, setAutoAuthStarted] = useState(false);
+  const skipAutoAuth = shouldSkipAutoAuth();
+
+  useEffect(() => {
+    if (isAwaitingTelegramSwitch()) {
+      navigate('/login/switch-telegram', { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -32,32 +42,32 @@ export default function AuthLandingPage() {
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (!isTelegramEnv() || isAuthenticated || autoAuthStarted) return;
+    if (
+      !isTelegramEnv() ||
+      isAuthenticated ||
+      autoAuthStarted ||
+      skipAutoAuth ||
+      isAwaitingTelegramSwitch()
+    ) {
+      return;
+    }
 
     let cancelled = false;
     setAutoAuthStarted(true);
 
     (async () => {
       try {
-        const status = await checkUser();
+        const result = await telegramAutoAuth();
         if (cancelled) return;
 
-        if (status.deleted && status.can_restore) {
+        if (result === 'restore') {
           setRestoreOpen(true);
           return;
         }
 
-        if (status.exists) {
-          await login();
-          if (!cancelled) navigate(getPostLoginPath(), { replace: true });
-          return;
-        }
-
-        resetOnboarding();
-        await register();
-        if (!cancelled) navigate(getPostLoginPath(), { replace: true });
+        navigate(getPostLoginPath(), { replace: true });
       } catch {
-        // user can retry manually in dev mode
+        // error is stored in auth store
       }
     })();
 
@@ -66,16 +76,30 @@ export default function AuthLandingPage() {
     };
   }, [
     autoAuthStarted,
-    checkUser,
     isAuthenticated,
-    login,
     navigate,
-    register,
     resetOnboarding,
+    skipAutoAuth,
+    telegramAutoAuth,
   ]);
 
   const afterLogin = () => {
     navigate(getPostLoginPath(), { replace: true });
+  };
+
+  const handleManualLogin = async () => {
+    setAutoAuthStarted(true);
+    beginFreshTelegramAuth();
+    try {
+      const result = await telegramAutoAuth();
+      if (result === 'restore') {
+        setRestoreOpen(true);
+        return;
+      }
+      afterLogin();
+    } catch {
+      // error in store
+    }
   };
 
   const handleRestore = async () => {
@@ -101,11 +125,24 @@ export default function AuthLandingPage() {
   };
 
   const handleDevLogin = async () => {
+    beginFreshTelegramAuth();
     await devLogin(devId);
     afterLogin();
   };
 
-  const showTelegramLoading = isTelegramEnv() && !isAuthenticated && (isLoading || !error);
+  const showTelegramLoading =
+    isTelegramEnv() &&
+    !isAuthenticated &&
+    !skipAutoAuth &&
+    !isAwaitingTelegramSwitch() &&
+    isLoading;
+
+  const showManualLogin =
+    isTelegramEnv() &&
+    !isAuthenticated &&
+    skipAutoAuth &&
+    !isLoading &&
+    !isAwaitingTelegramSwitch();
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
@@ -116,7 +153,7 @@ export default function AuthLandingPage() {
       <div className="text-center">
         <h1 className="text-2xl font-bold">Ласкаво просимо до Crewio</h1>
         <p className="mt-1 text-sm text-[var(--tg-hint)]">
-          {isTelegramEnv()
+          {showTelegramLoading
             ? 'Вхід через Telegram...'
             : 'Управління змінами персоналу'}
         </p>
@@ -130,9 +167,20 @@ export default function AuthLandingPage() {
       )}
 
       {error && !isLoading && (
-        <p className="max-w-xs text-center text-sm text-[var(--crew-crimson)]">
+        <p className="max-w-xs whitespace-pre-line text-center text-sm text-[var(--crew-crimson)]">
           {error}
         </p>
+      )}
+
+      {showManualLogin && (
+        <div className="w-full max-w-xs space-y-3">
+          <p className="text-center text-sm text-[var(--tg-hint)]">
+            Ви вийшли з акаунта Crewio. Увійдіть знову через Telegram.
+          </p>
+          <button type="button" className="btn-primary" onClick={handleManualLogin}>
+            Увійти через Telegram
+          </button>
+        </div>
       )}
 
       {!isTelegramEnv() && !isLoading && (

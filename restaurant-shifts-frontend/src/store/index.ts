@@ -16,6 +16,8 @@ import { employeesApi } from '@/api/employees.api';
 import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
 import { getErrorMessage, withRetry } from '@/api/client';
+import { withAuthTimeout } from '@/utils/async';
+import { beginFreshTelegramAuth } from '@/utils/session';
 
 function sessionFromAuth(res: AuthResponse) {
   return {
@@ -50,6 +52,7 @@ interface AuthState {
   restoreAccount: () => Promise<void>;
   recreateAccount: () => Promise<void>;
   checkUser: () => Promise<CheckUserResponse>;
+  telegramAutoAuth: () => Promise<'restore' | 'ok'>;
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
   loadContext: () => Promise<void>;
@@ -80,7 +83,7 @@ export const useAuthStore = create<AuthState>()(
       refreshAccessToken: async () => {
         const { refreshToken } = get();
         if (!refreshToken) throw new Error('No refresh token');
-        const res = await authApi.refresh(refreshToken);
+        const res = await withAuthTimeout(authApi.refresh(refreshToken));
         set(sessionFromAuth(res));
         return res.accessToken;
       },
@@ -95,7 +98,7 @@ export const useAuthStore = create<AuthState>()(
           }
           tg.ready();
           tg.expand();
-          const res = await withRetry(() => authApi.login(initData));
+          const res = await withAuthTimeout(withRetry(() => authApi.login(initData)));
           set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
@@ -120,7 +123,7 @@ export const useAuthStore = create<AuthState>()(
           if (!initData) {
             throw new Error('Відкрийте застосунок у Telegram');
           }
-          const res = await authApi.register(initData);
+          const res = await withAuthTimeout(authApi.register(initData));
           set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
@@ -145,7 +148,7 @@ export const useAuthStore = create<AuthState>()(
           if (!initData) {
             throw new Error('Відкрийте застосунок у Telegram');
           }
-          const res = await authApi.restoreAccount(initData);
+          const res = await withAuthTimeout(authApi.restoreAccount(initData));
           set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
@@ -170,7 +173,7 @@ export const useAuthStore = create<AuthState>()(
           if (!initData) {
             throw new Error('Відкрийте застосунок у Telegram');
           }
-          const res = await authApi.recreateAccount(initData);
+          const res = await withAuthTimeout(authApi.recreateAccount(initData));
           set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
@@ -193,13 +196,65 @@ export const useAuthStore = create<AuthState>()(
         if (!initData) {
           throw new Error('Відкрийте застосунок у Telegram');
         }
-        return authApi.checkUser(initData);
+        return withAuthTimeout(authApi.checkUser(initData));
+      },
+
+      telegramAutoAuth: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const initData = window.Telegram?.WebApp?.initData;
+          if (!initData) {
+            throw new Error('Відкрийте застосунок у Telegram');
+          }
+
+          const tg = window.Telegram?.WebApp;
+          tg?.ready();
+          tg?.expand();
+
+          const result = await withAuthTimeout(
+            (async (): Promise<'restore' | 'ok'> => {
+              const status = await authApi.checkUser(initData);
+              if (status.deleted && status.can_restore) {
+                return 'restore';
+              }
+
+              beginFreshTelegramAuth();
+
+              if (status.exists) {
+                const res = await withRetry(() => authApi.login(initData));
+                set(sessionFromAuth(res));
+              } else {
+                const { useOnboardingStore } = await import('@/store/onboarding');
+                useOnboardingStore.getState().reset();
+                const res = await authApi.register(initData);
+                set(sessionFromAuth(res));
+              }
+
+              await get().loadContext().catch(() => undefined);
+              return 'ok';
+            })(),
+          );
+
+          return result;
+        } catch (e) {
+          set({
+            error: getErrorMessage(e),
+            isAuthenticated: false,
+            token: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            user: null,
+          });
+          throw e;
+        } finally {
+          set({ isLoading: false });
+        }
       },
 
       devLogin: async (telegramId: string) => {
         set({ isLoading: true, error: null });
         try {
-          const res = await authApi.devLogin(telegramId, 'Dev User');
+          const res = await withAuthTimeout(authApi.devLogin(telegramId, 'Dev User'));
           set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
@@ -280,7 +335,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       completeProfile: async (payload) => {
-        const res = await authApi.completeProfile(payload);
+        const res = await withAuthTimeout(authApi.completeProfile(payload));
         set(sessionFromAuth(res));
         await get().loadContext().catch(() => undefined);
       },

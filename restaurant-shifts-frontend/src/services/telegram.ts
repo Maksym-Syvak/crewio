@@ -40,3 +40,11 @@ function applyCrewioTheme(isDark: boolean) {
 export function isTelegramEnv() {
   return Boolean(window.Telegram?.WebApp?.initData);
 }
+
+export function closeTelegramApp() {
+  window.Telegram?.WebApp?.close();
+}
+
+export function reloadApp() {
+  window.location.reload();
+}
