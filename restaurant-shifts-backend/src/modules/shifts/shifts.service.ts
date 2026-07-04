@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, LessThan, MoreThan, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Shift, ShiftStatus } from './entities/shift.entity';
-import { ShiftEmployee } from './entities/shift-employee.entity';
+import {
+  ShiftBooking,
+  ShiftBookingStatus,
+} from './entities/shift-booking.entity';
 import { Employee } from '../employees/entities/employee.entity';
 import {
   ReplacementRequest,
@@ -14,15 +17,15 @@ import { UpdateShiftDto } from './dto/update-shift.dto';
 import { GenerateScheduleDto } from './dto/generate-schedule.dto';
 import { generateShiftSlots } from './utils/schedule-generator';
 
-const MAX_WEEKLY_HOURS = 60; // simple guardrail; make this configurable per restaurant later
+const MAX_WEEKLY_HOURS = 60;
 
 @Injectable()
 export class ShiftsService {
   constructor(
     @InjectRepository(Shift)
     private readonly shiftsRepo: Repository<Shift>,
-    @InjectRepository(ShiftEmployee)
-    private readonly shiftEmployeesRepo: Repository<ShiftEmployee>,
+    @InjectRepository(ShiftBooking)
+    private readonly bookingsRepo: Repository<ShiftBooking>,
     @InjectRepository(Employee)
     private readonly employeesRepo: Repository<Employee>,
     @InjectRepository(ReplacementRequest)
@@ -30,22 +33,55 @@ export class ShiftsService {
     private readonly events: EventEmitter2,
   ) {}
 
+  private toShiftDate(start: Date): string {
+    return start.toISOString().slice(0, 10);
+  }
+
+  private syncShiftStatus(shift: Shift, booked: number) {
+    shift.booked_employees = booked;
+    if (shift.status === ShiftStatus.CANCELLED) return shift;
+
+    if (shift.is_urgent && booked < shift.required_employees) {
+      shift.status = ShiftStatus.URGENT;
+    } else if (booked >= shift.required_employees) {
+      shift.status = ShiftStatus.FULLY_FILLED;
+    } else if (booked > 0) {
+      shift.status = ShiftStatus.PARTIALLY_FILLED;
+    } else {
+      shift.status = ShiftStatus.OPEN;
+    }
+    return shift;
+  }
+
+  private activeBookingsCount(shift: Shift) {
+    return (
+      shift.bookings?.filter((b) => b.status === ShiftBookingStatus.CONFIRMED)
+        .length ?? shift.booked_employees
+    );
+  }
+
   findAll(filters: { restaurantId?: string; employeeId?: string; status?: ShiftStatus }) {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (filters.restaurantId) where.restaurant_id = filters.restaurantId;
     if (filters.status) where.status = filters.status;
-    // employeeId filtering is handled with a query builder for the join table
+
     if (filters.employeeId) {
       return this.shiftsRepo
         .createQueryBuilder('shift')
-        .leftJoinAndSelect('shift.assignments', 'assignment')
-        .leftJoinAndSelect('shift.position', 'position')
-        .where('assignment.employee_id = :employeeId', { employeeId: filters.employeeId })
+        .leftJoinAndSelect('shift.bookings', 'booking')
+        .leftJoinAndSelect('booking.employee', 'employee')
+        .leftJoinAndSelect('employee.user', 'user')
+        .where('booking.employee_id = :employeeId', { employeeId: filters.employeeId })
+        .andWhere('booking.status = :confirmed', {
+          confirmed: ShiftBookingStatus.CONFIRMED,
+        })
+        .orderBy('shift.start_time', 'ASC')
         .getMany();
     }
+
     return this.shiftsRepo.find({
       where,
-      relations: ['position', 'assignments', 'assignments.employee'],
+      relations: ['bookings', 'bookings.employee', 'bookings.employee.user', 'restaurant'],
       order: { start_time: 'ASC' },
     });
   }
@@ -53,18 +89,31 @@ export class ShiftsService {
   async findOne(id: string) {
     const shift = await this.shiftsRepo.findOne({
       where: { id },
-      relations: ['position', 'restaurant', 'assignments', 'assignments.employee'],
+      relations: [
+        'restaurant',
+        'bookings',
+        'bookings.employee',
+        'bookings.employee.user',
+      ],
     });
     if (!shift) throw new NotFoundException('Shift not found');
     return shift;
   }
 
   async create(dto: CreateShiftDto) {
+    const start = new Date(dto.start_time);
+    const end = new Date(dto.end_time);
     const shift = this.shiftsRepo.create({
-      ...dto,
-      start_time: new Date(dto.start_time),
-      end_time: new Date(dto.end_time),
+      restaurant_id: dto.restaurant_id,
+      shift_date: this.toShiftDate(start),
+      start_time: start,
+      end_time: end,
+      required_employees: dto.required_employees ?? 1,
+      booked_employees: 0,
+      shift_type: dto.shift_type ?? null,
+      payment_rate: dto.payment_rate ?? null,
       status: dto.is_urgent ? ShiftStatus.URGENT : ShiftStatus.OPEN,
+      is_urgent: dto.is_urgent ?? false,
     });
     const saved = await this.shiftsRepo.save(shift);
     this.events.emit('shift.created', saved);
@@ -82,7 +131,6 @@ export class ShiftsService {
         const exists = await this.shiftsRepo.count({
           where: {
             restaurant_id: dto.restaurant_id,
-            position_id: dto.position_id,
             start_time: slot.start_time,
           },
         });
@@ -94,10 +142,11 @@ export class ShiftsService {
 
       const shift = await this.create({
         restaurant_id: dto.restaurant_id,
-        position_id: dto.position_id,
         start_time: slot.start_time.toISOString(),
         end_time: slot.end_time.toISOString(),
         required_employees: dto.required_employees ?? 1,
+        shift_type: dto.shift_type,
+        payment_rate: dto.payment_rate,
         is_urgent: false,
       });
       created.push(shift);
@@ -113,14 +162,32 @@ export class ShiftsService {
 
   async update(id: string, dto: UpdateShiftDto) {
     const existing = await this.findOne(id);
-    await this.shiftsRepo.update(id, {
-      ...dto,
-      start_time: dto.start_time ? new Date(dto.start_time) : undefined,
-      end_time: dto.end_time ? new Date(dto.end_time) : undefined,
-    });
-    const updated = await this.findOne(id);
+    const patch: Record<string, unknown> = { ...dto };
+
+    if (dto.start_time) {
+      patch.start_time = new Date(dto.start_time);
+      patch.shift_date = this.toShiftDate(patch.start_time as Date);
+    }
+    if (dto.end_time) patch.end_time = new Date(dto.end_time);
+
+    if (dto.required_employees !== undefined) {
+      const booked = this.activeBookingsCount(existing);
+      if (dto.required_employees < booked) {
+        throw new BadRequestException(
+          'Не можна встановити менше місць, ніж уже заброньовано',
+        );
+      }
+    }
+
+    await this.shiftsRepo.update(id, patch);
+    let updated = await this.findOne(id);
+    updated = this.syncShiftStatus(updated, this.activeBookingsCount(updated));
+    await this.shiftsRepo.save(updated);
+
     this.events.emit('shift.updated', updated);
-    if (!existing.is_urgent && updated.is_urgent) this.events.emit('shift.emergency', updated);
+    if (!existing.is_urgent && updated.is_urgent) {
+      this.events.emit('shift.emergency', updated);
+    }
     return updated;
   }
 
@@ -131,35 +198,41 @@ export class ShiftsService {
     return { deleted: true };
   }
 
-  // --- Booking (TOR section 11) ---
   async book(shiftId: string, employeeId: string) {
     const shift = await this.findOne(shiftId);
     const employee = await this.employeesRepo.findOne({ where: { id: employeeId } });
     if (!employee) throw new NotFoundException('Employee not found');
 
-    if (employee.position_id && employee.position_id !== shift.position_id) {
-      throw new BadRequestException("Employee's position does not match this shift");
+    if (employee.restaurant_id !== shift.restaurant_id) {
+      throw new BadRequestException('Працівник не належить до цього закладу');
     }
 
-    const alreadyAssigned = shift.assignments?.some((a) => a.employee_id === employeeId);
-    if (alreadyAssigned) {
-      throw new BadRequestException('Employee is already assigned to this shift');
+    const booked = this.activeBookingsCount(shift);
+    if (booked >= shift.required_employees) {
+      throw new BadRequestException('Зміна вже заповнена');
     }
 
-    if (shift.assignments && shift.assignments.length >= shift.required_employees) {
-      throw new BadRequestException('Shift is already fully staffed');
+    const alreadyBooked = shift.bookings?.some(
+      (b) =>
+        b.employee_id === employeeId && b.status === ShiftBookingStatus.CONFIRMED,
+    );
+    if (alreadyBooked) {
+      throw new BadRequestException('Ви вже забронювали цю зміну');
     }
 
     await this.assertNoOverlap(employeeId, shift.start_time, shift.end_time);
     await this.assertWithinWeeklyLimit(employeeId, shift);
 
-    const assignment = this.shiftEmployeesRepo.create({ shift_id: shiftId, employee_id: employeeId });
-    await this.shiftEmployeesRepo.save(assignment);
+    const booking = this.bookingsRepo.create({
+      shift_id: shiftId,
+      employee_id: employeeId,
+      status: ShiftBookingStatus.CONFIRMED,
+    });
+    await this.bookingsRepo.save(booking);
 
     const updatedShift = await this.findOne(shiftId);
-    const filled = updatedShift.assignments.length;
-    updatedShift.status =
-      filled >= updatedShift.required_employees ? ShiftStatus.FULLY_FILLED : ShiftStatus.PARTIALLY_FILLED;
+    const newCount = this.activeBookingsCount(updatedShift);
+    this.syncShiftStatus(updatedShift, newCount);
     await this.shiftsRepo.save(updatedShift);
 
     this.events.emit('shift.updated', updatedShift);
@@ -170,12 +243,15 @@ export class ShiftsService {
   private async assertNoOverlap(employeeId: string, start: Date, end: Date) {
     const overlapping = await this.shiftsRepo
       .createQueryBuilder('shift')
-      .innerJoin('shift.assignments', 'assignment')
-      .where('assignment.employee_id = :employeeId', { employeeId })
+      .innerJoin('shift.bookings', 'booking')
+      .where('booking.employee_id = :employeeId', { employeeId })
+      .andWhere('booking.status = :confirmed', {
+        confirmed: ShiftBookingStatus.CONFIRMED,
+      })
       .andWhere('shift.start_time < :end AND shift.end_time > :start', { start, end })
       .getCount();
     if (overlapping > 0) {
-      throw new BadRequestException('This shift overlaps with another shift already booked');
+      throw new BadRequestException('Зміна перетинається з іншою вашою бронню');
     }
   }
 
@@ -188,8 +264,11 @@ export class ShiftsService {
 
     const weekShifts = await this.shiftsRepo
       .createQueryBuilder('shift')
-      .innerJoin('shift.assignments', 'assignment')
-      .where('assignment.employee_id = :employeeId', { employeeId })
+      .innerJoin('shift.bookings', 'booking')
+      .where('booking.employee_id = :employeeId', { employeeId })
+      .andWhere('booking.status = :confirmed', {
+        confirmed: ShiftBookingStatus.CONFIRMED,
+      })
       .andWhere('shift.start_time BETWEEN :weekStart AND :weekEnd', { weekStart, weekEnd })
       .getMany();
 
@@ -197,25 +276,32 @@ export class ShiftsService {
       (sum, s) => sum + (s.end_time.getTime() - s.start_time.getTime()) / 3_600_000,
       0,
     );
-    const newShiftHours = (shift.end_time.getTime() - shift.start_time.getTime()) / 3_600_000;
+    const newShiftHours =
+      (shift.end_time.getTime() - shift.start_time.getTime()) / 3_600_000;
 
     if (hoursAlready + newShiftHours > MAX_WEEKLY_HOURS) {
-      throw new BadRequestException('Booking this shift would exceed the weekly hour limit');
+      throw new BadRequestException('Перевищено тижневий ліміт годин');
     }
   }
 
-  // --- "Can't make my shift" (TOR section 12) ---
   async cannotMakeShift(shiftId: string, employeeId: string, reason?: string) {
     const shift = await this.findOne(shiftId);
-    const assignment = shift.assignments?.find((a) => a.employee_id === employeeId);
-    if (!assignment) {
-      throw new BadRequestException('This employee is not assigned to the shift');
+    const booking = shift.bookings?.find(
+      (b) =>
+        b.employee_id === employeeId && b.status === ShiftBookingStatus.CONFIRMED,
+    );
+    if (!booking) {
+      throw new BadRequestException('Ви не забронювали цю зміну');
     }
 
-    await this.shiftEmployeesRepo.remove(assignment);
+    booking.status = ShiftBookingStatus.CANCELLED;
+    await this.bookingsRepo.save(booking);
 
-    shift.status = ShiftStatus.OPEN;
-    await this.shiftsRepo.save(shift);
+    const updatedShift = await this.findOne(shiftId);
+    const newCount = this.activeBookingsCount(updatedShift);
+    updatedShift.is_urgent = true;
+    this.syncShiftStatus(updatedShift, newCount);
+    await this.shiftsRepo.save(updatedShift);
 
     const request = this.replacementRepo.create({
       shift_id: shiftId,
@@ -225,8 +311,9 @@ export class ShiftsService {
     });
     const saved = await this.replacementRepo.save(request);
 
-    this.events.emit('shift.updated', shift);
-    this.events.emit('replacement.requested', { request: saved, shift });
+    this.events.emit('shift.updated', updatedShift);
+    this.events.emit('shift.emergency', updatedShift);
+    this.events.emit('replacement.requested', { request: saved, shift: updatedShift });
     return saved;
   }
 }

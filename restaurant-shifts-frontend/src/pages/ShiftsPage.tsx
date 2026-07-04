@@ -4,8 +4,15 @@ import { useAuthStore, useShiftsStore } from '@/store';
 import { ShiftCard } from '@/components/ShiftCard';
 import { PageSkeleton } from '@/components/Skeleton';
 import type { Shift } from '@/types';
+import { isAdminRole } from '@/utils/roles';
+import {
+  getAvailableSlots,
+  isEmployeeBooked,
+  isShiftFull,
+} from '@/utils/shifts';
 
-type SortKey = 'date_asc' | 'date_desc' | 'pay_desc';
+type Tab = 'available' | 'mine' | 'all';
+type SortKey = 'date_asc' | 'date_desc';
 
 export default function ShiftsPage() {
   const employee = useAuthStore((s) => s.employee);
@@ -15,54 +22,36 @@ export default function ShiftsPage() {
   const isLoading = useShiftsStore((s) => s.isLoading);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<string>('');
-  const [positionId, setPositionId] = useState('');
+  const isAdmin = Boolean(user && isAdminRole(user.role));
+  const [tab, setTab] = useState<Tab>(isAdmin ? 'all' : 'available');
   const [sort, setSort] = useState<SortKey>('date_asc');
 
   useEffect(() => {
     if (restaurant) fetchShifts(restaurant.id);
   }, [restaurant, fetchShifts]);
 
-  const positions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of shifts) {
-      if (s.position) map.set(s.position.id, s.position.name);
-    }
-    return [...map.entries()];
-  }, [shifts]);
-
   const filtered = useMemo(() => {
     let list = [...shifts];
 
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (s) =>
-          s.position?.name.toLowerCase().includes(q) ||
-          s.restaurant?.name.toLowerCase().includes(q),
-      );
+    if (tab === 'available') {
+      list = list.filter((s) => !isShiftFull(s) && s.status !== 'cancelled');
+    } else if (tab === 'mine') {
+      list = list.filter((s) => isEmployeeBooked(s, employee?.id));
     }
-    if (status) list = list.filter((s) => s.status === status);
-    if (positionId) list = list.filter((s) => s.position_id === positionId);
 
     list.sort((a, b) => {
-      if (sort === 'date_asc')
-        return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-      if (sort === 'date_desc')
-        return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
-      const payA = a.position?.shift_rate ?? a.position?.hourly_rate ?? 0;
-      const payB = b.position?.shift_rate ?? b.position?.hourly_rate ?? 0;
-      return payB - payA;
+      const ta = new Date(a.start_time).getTime();
+      const tb = new Date(b.start_time).getTime();
+      return sort === 'date_asc' ? ta - tb : tb - ta;
     });
 
     return list;
-  }, [shifts, search, status, positionId, sort]);
+  }, [shifts, tab, sort, employee?.id]);
 
   const getVariant = (s: Shift) => {
     if (s.is_urgent || s.status === 'urgent') return 'urgent' as const;
-    if (s.assignments?.some((a) => a.employee_id === employee?.id))
-      return 'mine' as const;
+    if (isEmployeeBooked(s, employee?.id)) return 'mine' as const;
+    if (getAvailableSlots(s) === 0) return 'dayoff' as const;
     return 'available' as const;
   };
 
@@ -72,43 +61,35 @@ export default function ShiftsPage() {
     <div className="page">
       <div className="mb-3 flex items-center justify-between">
         <h1 className="page-title mb-0">Зміни</h1>
-        {(user?.role === 'owner' || user?.role === 'admin') && (
+        {isAdmin && (
           <Link to="/shifts/create" className="text-sm text-[var(--tg-link)]">
             + Створити
           </Link>
         )}
       </div>
 
-      <input
-        className="mb-3 w-full rounded-lg bg-[var(--tg-secondary-bg)] px-3 py-2 text-sm outline-none"
-        placeholder="Пошук..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      {!isAdmin && (
+        <p className="mb-3 text-sm text-[var(--tg-hint)]">
+          Оберіть вільну зміну та забронюйте її самостійно.
+        </p>
+      )}
 
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-        <select
-          className="rounded-lg bg-[var(--tg-secondary-bg)] px-2 py-1.5 text-xs"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="">Всі статуси</option>
-          <option value="open">Відкрита</option>
-          <option value="partially_filled">Частково</option>
-          <option value="urgent">Термінова</option>
-        </select>
-        <select
-          className="rounded-lg bg-[var(--tg-secondary-bg)] px-2 py-1.5 text-xs"
-          value={positionId}
-          onChange={(e) => setPositionId(e.target.value)}
-        >
-          <option value="">Всі посади</option>
-          {positions.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
+        {!isAdmin && (
+          <>
+            <TabButton active={tab === 'available'} onClick={() => setTab('available')}>
+              Доступні
+            </TabButton>
+            <TabButton active={tab === 'mine'} onClick={() => setTab('mine')}>
+              Мої
+            </TabButton>
+          </>
+        )}
+        {isAdmin && (
+          <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
+            Усі
+          </TabButton>
+        )}
         <select
           className="rounded-lg bg-[var(--tg-secondary-bg)] px-2 py-1.5 text-xs"
           value={sort}
@@ -116,7 +97,6 @@ export default function ShiftsPage() {
         >
           <option value="date_asc">Дата ↑</option>
           <option value="date_desc">Дата ↓</option>
-          <option value="pay_desc">Оплата ↓</option>
         </select>
       </div>
 
@@ -126,10 +106,30 @@ export default function ShiftsPage() {
         ))}
         {filtered.length === 0 && (
           <p className="text-center text-sm text-[var(--tg-hint)]">
-            Змін не знайдено
+            {tab === 'available' ? 'Немає доступних змін' : 'Змін не знайдено'}
           </p>
         )}
       </div>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`rounded-lg px-3 py-1.5 text-xs ${active ? 'bg-[var(--crew-burgundy)] text-white' : 'bg-[var(--tg-secondary-bg)]'}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }

@@ -9,29 +9,39 @@ import {
 import { Shift } from './shift.entity';
 import { Employee } from '../../employees/entities/employee.entity';
 
-// Join table: which employees are assigned to which shift.
-// A shift can have several employees if required_employees > 1.
-@Entity('shift_employees')
-export class ShiftEmployee {
+export enum ShiftBookingStatus {
+  CONFIRMED = 'confirmed',
+  CANCELLED = 'cancelled',
+}
+
+@Entity('shift_bookings')
+export class ShiftBooking {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
   shift_id: string;
 
-  @ManyToOne(() => Shift, (shift) => shift.assignments, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Shift, (shift) => shift.bookings, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'shift_id' })
   shift: Shift;
 
   @Column()
   employee_id: string;
 
-  @ManyToOne(() => Employee, (employee) => employee.shiftAssignments, {
+  @ManyToOne(() => Employee, (employee) => employee.shiftBookings, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'employee_id' })
   employee: Employee;
 
+  @Column({
+    type: 'enum',
+    enum: ShiftBookingStatus,
+    default: ShiftBookingStatus.CONFIRMED,
+  })
+  status: ShiftBookingStatus;
+
   @CreateDateColumn()
-  assigned_at: Date;
+  created_at: Date;
 }

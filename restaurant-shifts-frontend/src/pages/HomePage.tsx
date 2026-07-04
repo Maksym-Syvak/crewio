@@ -5,6 +5,7 @@ import { ShiftCard } from '@/components/ShiftCard';
 import { PageSkeleton } from '@/components/Skeleton';
 import { dayjs } from '@/utils/dates';
 import { ONBOARDING_PATHS } from '@/store/onboarding';
+import { isEmployeeBooked, isShiftFull } from '@/utils/shifts';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -26,10 +27,7 @@ export default function HomePage() {
   const now = dayjs();
 
   const myShifts = useMemo(
-    () =>
-      shifts.filter((s) =>
-        s.assignments?.some((a) => a.employee_id === employee?.id),
-      ),
+    () => shifts.filter((s) => isEmployeeBooked(s, employee?.id)),
     [shifts, employee],
   );
 
@@ -45,10 +43,9 @@ export default function HomePage() {
     () =>
       shifts.filter(
         (s) =>
-          !s.assignments?.some((a) => a.employee_id === employee?.id) &&
-          (s.status === 'open' ||
-            s.status === 'partially_filled' ||
-            s.status === 'urgent'),
+          !isEmployeeBooked(s, employee?.id) &&
+          !isShiftFull(s) &&
+          s.status !== 'cancelled',
       ),
     [shifts, employee],
   );

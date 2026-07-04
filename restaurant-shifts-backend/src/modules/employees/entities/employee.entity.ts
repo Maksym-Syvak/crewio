@@ -10,7 +10,7 @@ import {
 import { Restaurant } from '../../restaurants/entities/restaurant.entity';
 import { User } from '../../users/entities/user.entity';
 import { Position } from '../../positions/entities/position.entity';
-import { ShiftEmployee } from '../../shifts/entities/shift-employee.entity';
+import { ShiftBooking } from '../../shifts/entities/shift-booking.entity';
 
 export enum EmployeeStatus {
   ACTIVE = 'active',
@@ -73,6 +73,6 @@ export class Employee {
   @CreateDateColumn()
   created_at: Date;
 
-  @OneToMany(() => ShiftEmployee, (shiftEmployee) => shiftEmployee.employee)
-  shiftAssignments: ShiftEmployee[];
+  @OneToMany(() => ShiftBooking, (booking) => booking.employee)
+  shiftBookings: ShiftBooking[];
 }

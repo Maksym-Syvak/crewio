@@ -6,6 +6,14 @@ import { useAuthStore, useToastStore } from '@/store';
 import { formatDate, formatTime, shiftDurationHours } from '@/utils/dates';
 import { getErrorMessage } from '@/api/client';
 import { isAdminRole } from '@/utils/roles';
+import {
+  getAvailableSlots,
+  getBookedCount,
+  getShiftBookings,
+  getShiftPayLabel,
+  isEmployeeBooked,
+  isShiftFull,
+} from '@/utils/shifts';
 import type { Shift } from '@/types';
 import { PageSkeleton } from '@/components/Skeleton';
 
@@ -27,9 +35,12 @@ export default function ShiftDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const isBooked = shift?.assignments?.some(
-    (a) => a.employee_id === employee?.id,
-  );
+  const isAdmin = Boolean(user && isAdminRole(user.role));
+  const booked = shift ? getBookedCount(shift) : 0;
+  const available = shift ? getAvailableSlots(shift) : 0;
+  const full = shift ? isShiftFull(shift) : false;
+  const isBooked = shift ? isEmployeeBooked(shift, employee?.id) : false;
+  const bookings = shift ? getShiftBookings(shift).filter((b) => b.status !== 'cancelled') : [];
 
   const handleBook = async () => {
     if (!shift || !employee) return;
@@ -47,11 +58,11 @@ export default function ShiftDetailPage() {
 
   const handleDecline = async () => {
     if (!shift || !employee) return;
-    if (!confirm('Відмовитись від зміни?')) return;
+    if (!confirm('Відмовитись від зміни? Запуститься термінова заміна для інших.')) return;
     setActing(true);
     try {
       await shiftsApi.cannotMakeIt(shift.id, employee.id);
-      push({ type: 'info', title: 'Запит на заміну надіслано' });
+      push({ type: 'info', title: 'Термінова заміна активована' });
       navigate('/emergency');
     } catch (e) {
       push({ type: 'error', title: getErrorMessage(e) });
@@ -79,8 +90,6 @@ export default function ShiftDetailPage() {
     }
   };
 
-  const isAdmin = Boolean(user && isAdminRole(user.role));
-
   const handleMarkDayOff = async () => {
     if (!shift) return;
     if (!confirm('Скасувати цю зміну (вихідний)?')) return;
@@ -89,6 +98,27 @@ export default function ShiftDetailPage() {
       await shiftsApi.remove(shift.id);
       push({ type: 'success', title: 'Зміну скасовано' });
       navigate(-1);
+    } catch (e) {
+      push({ type: 'error', title: getErrorMessage(e) });
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleChangeRequired = async () => {
+    if (!shift) return;
+    const raw = prompt('Нова кількість працівників:', String(shift.required_employees));
+    if (!raw) return;
+    const next = Number(raw);
+    if (!Number.isFinite(next) || next < 1) {
+      push({ type: 'error', title: 'Некоректне число' });
+      return;
+    }
+    setActing(true);
+    try {
+      const updated = await shiftsApi.update(shift.id, { required_employees: next });
+      setShift(updated);
+      push({ type: 'success', title: 'Оновлено' });
     } catch (e) {
       push({ type: 'error', title: getErrorMessage(e) });
     } finally {
@@ -123,15 +153,11 @@ export default function ShiftDetailPage() {
   }
 
   const hours = shiftDurationHours(shift.start_time, shift.end_time);
-  const rate = shift.position?.shift_rate ?? shift.position?.hourly_rate;
+  const pay = getShiftPayLabel(shift);
 
   return (
     <div className="page">
-      <button
-        type="button"
-        className="mb-3 text-sm text-[var(--tg-link)]"
-        onClick={() => navigate(-1)}
-      >
+      <button type="button" className="mb-3 text-sm text-[var(--tg-link)]" onClick={() => navigate(-1)}>
         ← Назад
       </button>
 
@@ -141,38 +167,30 @@ export default function ShiftDetailPage() {
         </div>
       )}
 
-      <h1 className="text-xl font-bold">{shift.position?.name}</h1>
+      <h1 className="text-xl font-bold">{shift.shift_type || 'Зміна'}</h1>
       <p className="text-[var(--tg-hint)]">{shift.restaurant?.name}</p>
 
       <dl className="card mt-4 space-y-3 text-sm">
         <Row label="Дата" value={formatDate(shift.start_time)} />
-        <Row
-          label="Час"
-          value={`${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}`}
-        />
+        <Row label="Час" value={`${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}`} />
         <Row label="Тривалість" value={`${hours.toFixed(1)} год`} />
-        {rate != null && <Row label="Оплата" value={`${rate} ₴`} />}
-        <Row label="Статус" value={shift.status} />
-        <Row
-          label="Працівники"
-          value={`${shift.assignments?.length ?? 0} / ${shift.required_employees}`}
-        />
+        {pay && <Row label="Оплата" value={pay} />}
+        <Row label="Статус" value={full ? 'Заповнено' : shift.status} />
+        <Row label="Вільно" value={`${available}/${shift.required_employees}`} />
+        <Row label="Заброньовано" value={`${booked}/${shift.required_employees}`} />
       </dl>
 
-      {shift.assignments && shift.assignments.length > 0 && (
+      {bookings.length > 0 && (
         <section className="mt-4">
-          <h2 className="mb-2 font-semibold">На зміні</h2>
+          <h2 className="mb-2 font-semibold">Забронювали</h2>
           <ul className="space-y-2">
-            {shift.assignments.map((a) => (
-              <li key={a.id} className="card flex items-center gap-3 text-sm">
+            {bookings.map((b) => (
+              <li key={b.id} className="card flex items-center gap-3 text-sm">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--tg-button)] text-white">
-                  {a.employee?.user?.first_name?.[0] ?? '?'}
+                  {b.employee?.user?.first_name?.[0] ?? '?'}
                 </div>
                 <div>
-                  {a.employee?.user?.first_name} {a.employee?.user?.last_name}
-                  <div className="text-xs text-[var(--tg-hint)]">
-                    {a.employee?.position?.name}
-                  </div>
+                  {b.employee?.user?.first_name} {b.employee?.user?.last_name}
                 </div>
               </li>
             ))}
@@ -181,53 +199,34 @@ export default function ShiftDetailPage() {
       )}
 
       <div className="mt-6 space-y-2">
-        {!isBooked && employee && (
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={acting}
-            onClick={handleBook}
-          >
+        {employee && !isBooked && !full && (
+          <button type="button" className="btn-primary" disabled={acting} onClick={handleBook}>
             Забронювати
           </button>
         )}
-        {isBooked && employee && (
-          <button
-            type="button"
-            className="btn-danger"
-            disabled={acting}
-            onClick={handleDecline}
-          >
+        {employee && isBooked && (
+          <button type="button" className="btn-danger" disabled={acting} onClick={handleDecline}>
             Відмовитись
           </button>
         )}
-        {!isBooked && shift.is_urgent && employee && (
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={acting}
-            onClick={handleApplyReplacement}
-          >
-            Запропонувати заміну
+        {full && !isBooked && (
+          <p className="text-center text-sm font-medium text-[var(--crew-burgundy)]">Заповнено</p>
+        )}
+        {!isBooked && shift.is_urgent && employee && !full && (
+          <button type="button" className="btn-secondary" disabled={acting} onClick={handleApplyReplacement}>
+            Відгукнутись на заміну
           </button>
         )}
         {isAdmin && (
           <>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={acting}
-              onClick={handleMarkDayOff}
-            >
+            <button type="button" className="btn-secondary" disabled={acting} onClick={handleChangeRequired}>
+              Змінити кількість працівників
+            </button>
+            <button type="button" className="btn-secondary" disabled={acting} onClick={handleMarkDayOff}>
               Зробити вихідним
             </button>
             {!shift.is_urgent && (
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={acting}
-                onClick={handleMarkHoliday}
-              >
+              <button type="button" className="btn-secondary" disabled={acting} onClick={handleMarkHoliday}>
                 Святкова зміна
               </button>
             )}

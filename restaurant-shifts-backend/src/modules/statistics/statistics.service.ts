@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Statistics } from './entities/statistics.entity';
 import { Employee } from '../employees/entities/employee.entity';
-import { ShiftEmployee } from '../shifts/entities/shift-employee.entity';
+import { ShiftBooking, ShiftBookingStatus } from '../shifts/entities/shift-booking.entity';
 
 function normalizeMonth(month?: string) {
   if (!month) return undefined;
@@ -19,8 +19,8 @@ export class StatisticsService {
     private readonly statsRepo: Repository<Statistics>,
     @InjectRepository(Employee)
     private readonly employeesRepo: Repository<Employee>,
-    @InjectRepository(ShiftEmployee)
-    private readonly shiftEmployeesRepo: Repository<ShiftEmployee>,
+    @InjectRepository(ShiftBooking)
+    private readonly bookingsRepo: Repository<ShiftBooking>,
   ) {}
 
   findAll(filters: { employeeId?: string; month?: string }) {
@@ -40,10 +40,13 @@ export class StatisticsService {
     const monthEnd = new Date(monthStart);
     monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
 
-    const assignments = await this.shiftEmployeesRepo
-      .createQueryBuilder('assignment')
-      .innerJoinAndSelect('assignment.shift', 'shift')
-      .where('assignment.employee_id = :employeeId', { employeeId })
+    const bookings = await this.bookingsRepo
+      .createQueryBuilder('booking')
+      .innerJoinAndSelect('booking.shift', 'shift')
+      .where('booking.employee_id = :employeeId', { employeeId })
+      .andWhere('booking.status = :confirmed', {
+        confirmed: ShiftBookingStatus.CONFIRMED,
+      })
       .andWhere('shift.start_time >= :monthStart AND shift.start_time < :monthEnd', {
         monthStart,
         monthEnd,
@@ -54,10 +57,10 @@ export class StatisticsService {
 
     let workedHours = 0;
     let nightShifts = 0;
-    for (const a of assignments) {
-      const hours = (a.shift.end_time.getTime() - a.shift.start_time.getTime()) / 3_600_000;
+    for (const b of bookings) {
+      const hours = (b.shift.end_time.getTime() - b.shift.start_time.getTime()) / 3_600_000;
       workedHours += hours;
-      if (a.shift.start_time.getHours() >= 22 || a.shift.start_time.getHours() < 6) {
+      if (b.shift.start_time.getHours() >= 22 || b.shift.start_time.getHours() < 6) {
         nightShifts += 1;
       }
     }
@@ -70,7 +73,7 @@ export class StatisticsService {
       row = this.statsRepo.create({ employee_id: employeeId, month: `${month}-01` });
     }
     row.worked_hours = workedHours;
-    row.worked_shifts = assignments.length;
+    row.worked_shifts = bookings.length;
     row.night_shifts = nightShifts;
     row.expected_salary = expectedSalary;
 

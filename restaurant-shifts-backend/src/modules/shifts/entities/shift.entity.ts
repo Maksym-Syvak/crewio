@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { Restaurant } from '../../restaurants/entities/restaurant.entity';
 import { Position } from '../../positions/entities/position.entity';
-import { ShiftEmployee } from './shift-employee.entity';
+import { ShiftBooking } from './shift-booking.entity';
 import { ReplacementRequest } from '../../replacement-requests/entities/replacement-request.entity';
 
 export enum ShiftStatus {
@@ -35,14 +35,8 @@ export class Shift {
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: Restaurant;
 
-  @Column()
-  position_id: string;
-
-  @ManyToOne(() => Position, (position) => position.shifts, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'position_id' })
-  position: Position;
+  @Column({ type: 'date', nullable: true })
+  shift_date: string | null;
 
   @Column({ type: 'timestamptz' })
   start_time: Date;
@@ -53,19 +47,37 @@ export class Shift {
   @Column({ default: 1 })
   required_employees: number;
 
+  @Column({ default: 0 })
+  booked_employees: number;
+
+  @Column({ nullable: true })
+  shift_type: string | null;
+
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  payment_rate: number | null;
+
   @Column({ type: 'enum', enum: ShiftStatus, default: ShiftStatus.OPEN })
   status: ShiftStatus;
 
   @Column({ default: false })
   is_urgent: boolean;
 
+  /** @deprecated Shifts are open pool — no position required */
+  @Column({ nullable: true })
+  position_id: string | null;
+
+  @ManyToOne(() => Position, (position) => position.shifts, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'position_id' })
+  position: Position | null;
+
   @CreateDateColumn()
   created_at: Date;
 
-  @OneToMany(() => ShiftEmployee, (shiftEmployee) => shiftEmployee.shift, {
-    cascade: true,
-  })
-  assignments: ShiftEmployee[];
+  @OneToMany(() => ShiftBooking, (booking) => booking.shift, { cascade: true })
+  bookings: ShiftBooking[];
 
   @OneToMany(() => ReplacementRequest, (request) => request.shift)
   replacementRequests: ReplacementRequest[];

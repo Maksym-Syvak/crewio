@@ -5,6 +5,7 @@ import { ShiftModal } from '@/components/ShiftModal';
 import { dayjs } from '@/utils/dates';
 import type { Shift } from '@/types';
 import { cn } from '@/utils/cn';
+import { isEmployeeBooked } from '@/utils/shifts';
 
 export default function CalendarPage() {
   const navigate = useNavigate();
@@ -45,12 +46,7 @@ export default function CalendarPage() {
     const dayShifts = shiftsByDay.get(key) ?? [];
     if (!dayShifts.length) return 'dayoff';
     if (dayShifts.some((s) => s.is_urgent)) return 'urgent';
-    if (
-      dayShifts.some((s) =>
-        s.assignments?.some((a) => a.employee_id === employee?.id),
-      )
-    )
-      return 'mine';
+    if (dayShifts.some((s) => isEmployeeBooked(s, employee?.id))) return 'mine';
     return 'available';
   };
 

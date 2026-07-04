@@ -3,10 +3,11 @@ import type { Shift, ShiftStatus } from '@/types';
 
 export interface CreateShiftPayload {
   restaurant_id: string;
-  position_id: string;
   start_time: string;
   end_time: string;
   required_employees?: number;
+  shift_type?: string;
+  payment_rate?: number;
   is_urgent?: boolean;
 }
 
@@ -22,7 +23,7 @@ export const shiftsApi = {
   create: (data: CreateShiftPayload) =>
     api.post<Shift>('/shifts', data).then((r) => r.data),
 
-  update: (id: string, data: Partial<CreateShiftPayload>) =>
+  update: (id: string, data: Partial<CreateShiftPayload & { required_employees?: number }>) =>
     api.put<Shift>(`/shifts/${id}`, data).then((r) => r.data),
 
   remove: (id: string) => api.delete(`/shifts/${id}`),
@@ -41,13 +42,14 @@ export type RotationPreset = '5_2' | '2_2' | '3_3' | 'custom';
 
 export interface GenerateSchedulePayload {
   restaurant_id: string;
-  position_id: string;
   mode: ScheduleMode;
   date_from: string;
   date_to: string;
   start_time: string;
   end_time: string;
   required_employees?: number;
+  shift_type?: string;
+  payment_rate?: number;
   weekdays?: number[];
   preset?: RotationPreset;
   work_days?: number;

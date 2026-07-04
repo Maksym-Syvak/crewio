@@ -28,9 +28,6 @@ export class GenerateScheduleDto {
   @IsString()
   restaurant_id: string;
 
-  @IsString()
-  position_id: string;
-
   @IsEnum(ScheduleMode)
   mode: ScheduleMode;
 
@@ -50,6 +47,15 @@ export class GenerateScheduleDto {
   @IsNumber()
   @Min(1)
   required_employees?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  payment_rate?: number;
+
+  @IsOptional()
+  @IsString()
+  shift_type?: string;
 
   /** Weekly mode: 0=Mon … 6=Sun */
   @IsOptional()

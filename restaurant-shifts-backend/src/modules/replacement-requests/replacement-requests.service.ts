@@ -7,7 +7,10 @@ import {
   ReplacementStatus,
 } from './entities/replacement-request.entity';
 import { Shift, ShiftStatus } from '../shifts/entities/shift.entity';
-import { ShiftEmployee } from '../shifts/entities/shift-employee.entity';
+import {
+  ShiftBooking,
+  ShiftBookingStatus,
+} from '../shifts/entities/shift-booking.entity';
 
 @Injectable()
 export class ReplacementRequestsService {
@@ -16,8 +19,8 @@ export class ReplacementRequestsService {
     private readonly repo: Repository<ReplacementRequest>,
     @InjectRepository(Shift)
     private readonly shiftsRepo: Repository<Shift>,
-    @InjectRepository(ShiftEmployee)
-    private readonly shiftEmployeesRepo: Repository<ShiftEmployee>,
+    @InjectRepository(ShiftBooking)
+    private readonly bookingsRepo: Repository<ShiftBooking>,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -38,15 +41,11 @@ export class ReplacementRequestsService {
     return request;
   }
 
-  // A coworker volunteers to take the open shift (TOR section 12)
   async apply(id: string, employeeId: string) {
     const request = await this.findOne(id);
     if (request.status === ReplacementStatus.APPROVED) {
       throw new BadRequestException('This replacement request is already resolved');
     }
-    // MVP: keep the first applicant as the recorded candidate. A future
-    // version could store multiple candidates in a separate table and let
-    // the admin pick among them.
     if (!request.candidate_employee_id) {
       request.candidate_employee_id = employeeId;
       request.status = ReplacementStatus.HAS_CANDIDATES;
@@ -56,7 +55,6 @@ export class ReplacementRequestsService {
     return request;
   }
 
-  // Admin confirms the replacement (TOR section 12)
   async approve(id: string, candidateEmployeeId: string) {
     const request = await this.findOne(id);
     if (request.status === ReplacementStatus.APPROVED) {
@@ -65,15 +63,16 @@ export class ReplacementRequestsService {
 
     const shift = await this.shiftsRepo.findOne({
       where: { id: request.shift_id },
-      relations: ['assignments'],
+      relations: ['bookings'],
     });
     if (!shift) throw new NotFoundException('Shift not found');
 
-    const assignment = this.shiftEmployeesRepo.create({
+    const booking = this.bookingsRepo.create({
       shift_id: shift.id,
       employee_id: candidateEmployeeId,
+      status: ShiftBookingStatus.CONFIRMED,
     });
-    await this.shiftEmployeesRepo.save(assignment);
+    await this.bookingsRepo.save(booking);
 
     request.candidate_employee_id = candidateEmployeeId;
     request.status = ReplacementStatus.APPROVED;
@@ -81,11 +80,16 @@ export class ReplacementRequestsService {
 
     const refreshedShift = await this.shiftsRepo.findOne({
       where: { id: shift.id },
-      relations: ['assignments'],
+      relations: ['bookings'],
     });
     if (!refreshedShift) throw new NotFoundException('Shift not found');
+
+    const confirmed = refreshedShift.bookings.filter(
+      (b) => b.status === ShiftBookingStatus.CONFIRMED,
+    ).length;
+    refreshedShift.booked_employees = confirmed;
     refreshedShift.status =
-      refreshedShift.assignments.length >= refreshedShift.required_employees
+      confirmed >= refreshedShift.required_employees
         ? ShiftStatus.FULLY_FILLED
         : ShiftStatus.PARTIALLY_FILLED;
     await this.shiftsRepo.save(refreshedShift);

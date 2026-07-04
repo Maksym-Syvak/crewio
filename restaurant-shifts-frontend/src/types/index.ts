@@ -127,27 +127,37 @@ export interface Employee {
   restaurant?: Restaurant;
 }
 
-export interface ShiftEmployee {
+export interface ShiftBooking {
   id: string;
   shift_id: string;
   employee_id: string;
-  assigned_at: string;
+  status?: 'confirmed' | 'cancelled';
+  created_at: string;
   employee?: Employee;
 }
+
+/** @deprecated use ShiftBooking */
+export type ShiftEmployee = ShiftBooking;
 
 export interface Shift {
   id: string;
   restaurant_id: string;
-  position_id: string;
+  shift_date?: string | null;
   start_time: string;
   end_time: string;
   required_employees: number;
+  booked_employees?: number;
+  shift_type?: string | null;
+  payment_rate?: number | null;
   status: ShiftStatus;
   is_urgent: boolean;
   created_at: string;
+  position_id?: string | null;
   position?: Position;
   restaurant?: Restaurant;
-  assignments?: ShiftEmployee[];
+  bookings?: ShiftBooking[];
+  /** @deprecated use bookings */
+  assignments?: ShiftBooking[];
   replacementRequests?: ReplacementRequest[];
 }
 

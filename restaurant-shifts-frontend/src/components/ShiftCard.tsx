@@ -1,6 +1,12 @@
 import { Link } from 'react-router-dom';
 import type { Shift } from '@/types';
 import { formatDate, formatTime } from '@/utils/dates';
+import {
+  getAvailableSlots,
+  getBookedCount,
+  getShiftPayLabel,
+  isShiftFull,
+} from '@/utils/shifts';
 import { cn } from '@/utils/cn';
 
 interface Props {
@@ -17,11 +23,18 @@ const variantStyles = {
 };
 
 export function ShiftCard({ shift, variant = 'available', onClick }: Props) {
+  const booked = getBookedCount(shift);
+  const available = getAvailableSlots(shift);
+  const full = isShiftFull(shift);
+  const pay = getShiftPayLabel(shift);
+
   const content = (
     <div className={cn('card cursor-pointer transition active:scale-[0.98]', variantStyles[variant])}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-semibold">{shift.position?.name ?? 'Зміна'}</div>
+          <div className="font-semibold">
+            {shift.shift_type || 'Зміна'}
+          </div>
           <div className="mt-1 text-sm text-[var(--tg-hint)]">
             {shift.restaurant?.name}
           </div>
@@ -37,8 +50,16 @@ export function ShiftCard({ shift, variant = 'available', onClick }: Props) {
         {formatTime(shift.end_time)}
       </div>
       <div className="mt-1 text-xs text-[var(--tg-hint)]">
-        {shift.assignments?.length ?? 0}/{shift.required_employees} працівників
+        {full ? (
+          <span className="font-medium text-[var(--crew-burgundy)]">Заповнено</span>
+        ) : (
+          <>Вільно: {available}/{shift.required_employees}</>
+        )}
+        {booked > 0 && !full && (
+          <span className="ml-2">· Заброньовано: {booked}</span>
+        )}
       </div>
+      {pay && <div className="mt-1 text-xs">{pay}</div>}
     </div>
   );
 
