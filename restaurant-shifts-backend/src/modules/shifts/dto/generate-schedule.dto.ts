@@ -10,6 +10,7 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import { PaymentType } from '../entities/shift.entity';
 
 export enum ScheduleMode {
   WEEKLY = 'weekly',
@@ -49,9 +50,29 @@ export class GenerateScheduleDto {
   required_employees?: number;
 
   @IsOptional()
+  @IsEnum(PaymentType)
+  payment_type?: PaymentType;
+
+  /** @deprecated use shift_rate */
+  @IsOptional()
   @IsNumber()
   @Min(0)
   payment_rate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  shift_rate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  hourly_rate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fixed_rate?: number;
 
   @IsOptional()
   @IsString()

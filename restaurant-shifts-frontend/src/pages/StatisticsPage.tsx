@@ -105,7 +105,11 @@ export default function StatisticsPage() {
 
   const current = stats[0] ?? {
     worked_shifts: 0,
+    planned_hours: 0,
+    actual_hours: 0,
     worked_hours: 0,
+    planned_salary: 0,
+    actual_salary: 0,
     expected_salary: 0,
     replacements: 0,
   };
@@ -128,9 +132,14 @@ export default function StatisticsPage() {
 
       <div className="grid grid-cols-2 gap-3">
         <Stat label="Змін" value={current.worked_shifts} />
-        <Stat label="Годин" value={current.worked_hours} />
+        <Stat label="Заплановано год" value={Number(current.planned_hours ?? current.worked_hours).toFixed(1)} />
+        <Stat label="Фактично год" value={Number(current.actual_hours ?? current.worked_hours).toFixed(1)} />
         <Stat label="Замін" value={current.replacements} />
-        <Stat label="Зарплата" value={`${current.expected_salary} ₴`} />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Stat label="Запланована зарплата" value={`${Math.round(Number(current.planned_salary ?? current.expected_salary))} ₴`} />
+        <Stat label="Зароблено" value={`${Math.round(Number(current.actual_salary ?? current.expected_salary))} ₴`} />
       </div>
 
       <section className="card mt-6">

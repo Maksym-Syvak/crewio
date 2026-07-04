@@ -1,15 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { Statistics } from './entities/statistics.entity';
 import { Employee } from '../employees/entities/employee.entity';
 import { ShiftBooking, ShiftBookingStatus } from '../shifts/entities/shift-booking.entity';
+import { ShiftStatus } from '../shifts/entities/shift.entity';
+import {
+  calculateActualSalary,
+  calculatePlannedSalary,
+  getActualHours,
+  getPlannedHours,
+} from '../shifts/utils/payment-calculator';
 
 function normalizeMonth(month?: string) {
   if (!month) return undefined;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(month)) return month;
-  if (/^\d{4}-\d{2}$/.test(month)) return `${month}-01`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(month)) return month.slice(0, 7);
+  if (/^\d{4}-\d{2}$/.test(month)) return month;
   return month;
+}
+
+function monthKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01`;
 }
 
 @Injectable()
@@ -23,20 +37,25 @@ export class StatisticsService {
     private readonly bookingsRepo: Repository<ShiftBooking>,
   ) {}
 
-  findAll(filters: { employeeId?: string; month?: string }) {
+  async findAll(filters: { employeeId?: string; month?: string }) {
     const where: Record<string, string> = {};
-    if (filters.employeeId) where.employee_id = filters.employeeId;
-    const month = normalizeMonth(filters.month);
-    if (month) where.month = month;
+
+    if (filters.employeeId) {
+      const month = normalizeMonth(filters.month) ?? new Date().toISOString().slice(0, 7);
+      await this.recompute(filters.employeeId, month);
+      where.employee_id = filters.employeeId;
+      where.month = `${month}-01`;
+    } else {
+      const month = normalizeMonth(filters.month);
+      if (month) where.month = `${month}-01`;
+    }
+
     return this.statsRepo.find({ where });
   }
 
-  // Recomputes and upserts the statistics row for one employee/month from
-  // completed shifts (TOR section 15 + 17). Intended to be called by a
-  // scheduled job (see @nestjs/schedule in AppModule) once shifts complete,
-  // or on-demand from an admin dashboard refresh action.
   async recompute(employeeId: string, month: string) {
-    const monthStart = new Date(`${month}-01T00:00:00Z`);
+    const normalized = normalizeMonth(month) ?? month;
+    const monthStart = new Date(`${normalized}-01T00:00:00Z`);
     const monthEnd = new Date(monthStart);
     monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
 
@@ -53,30 +72,62 @@ export class StatisticsService {
       })
       .getMany();
 
-    const employee = await this.employeesRepo.findOne({ where: { id: employeeId } });
-
-    let workedHours = 0;
+    let plannedHours = 0;
+    let actualHours = 0;
+    let plannedSalary = 0;
+    let actualSalary = 0;
     let nightShifts = 0;
+
     for (const b of bookings) {
-      const hours = (b.shift.end_time.getTime() - b.shift.start_time.getTime()) / 3_600_000;
-      workedHours += hours;
-      if (b.shift.start_time.getHours() >= 22 || b.shift.start_time.getHours() < 6) {
+      const shift = b.shift;
+      const planned = getPlannedHours(shift);
+      const actual = shift.status === ShiftStatus.COMPLETED ? getActualHours(shift) : planned;
+
+      plannedHours += planned;
+      actualHours += actual;
+
+      const plannedPay = b.planned_salary != null ? Number(b.planned_salary) : calculatePlannedSalary(shift);
+      const actualPay =
+        b.actual_salary != null
+          ? Number(b.actual_salary)
+          : shift.status === ShiftStatus.COMPLETED
+            ? calculateActualSalary(shift)
+            : plannedPay;
+
+      plannedSalary += plannedPay;
+      actualSalary += actualPay;
+
+      if (shift.start_time.getHours() >= 22 || shift.start_time.getHours() < 6) {
         nightShifts += 1;
       }
     }
 
-    const hourlyRate = Number(employee?.hourly_rate ?? 0);
-    const expectedSalary = workedHours * hourlyRate;
-
-    let row = await this.statsRepo.findOne({ where: { employee_id: employeeId, month: `${month}-01` } });
+    const monthDate = `${normalized}-01`;
+    let row = await this.statsRepo.findOne({
+      where: { employee_id: employeeId, month: monthDate },
+    });
     if (!row) {
-      row = this.statsRepo.create({ employee_id: employeeId, month: `${month}-01` });
+      row = this.statsRepo.create({ employee_id: employeeId, month: monthDate });
     }
-    row.worked_hours = workedHours;
+
+    row.planned_hours = plannedHours;
+    row.actual_hours = actualHours;
+    row.worked_hours = actualHours;
     row.worked_shifts = bookings.length;
     row.night_shifts = nightShifts;
-    row.expected_salary = expectedSalary;
+    row.planned_salary = plannedSalary;
+    row.actual_salary = actualSalary;
+    row.expected_salary = actualSalary;
 
     return this.statsRepo.save(row);
+  }
+
+  @OnEvent('shift.completed')
+  async onShiftCompleted(payload: { shift: { start_time: Date }; employeeIds: string[] }) {
+    const month = monthKey(new Date(payload.shift.start_time));
+    const unique = [...new Set(payload.employeeIds)];
+    for (const employeeId of unique) {
+      await this.recompute(employeeId, month);
+    }
   }
 }

@@ -42,6 +42,12 @@ export class ShiftBooking {
   })
   status: ShiftBookingStatus;
 
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  planned_salary: number | null;
+
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  actual_salary: number | null;
+
   @CreateDateColumn()
   created_at: Date;
 }

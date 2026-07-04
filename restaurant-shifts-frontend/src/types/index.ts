@@ -25,6 +25,8 @@ export type ShiftStatus =
   | 'completed'
   | 'cancelled';
 
+export type PaymentType = 'shift' | 'hourly' | 'fixed';
+
 export type ReplacementStatus =
   | 'pending'
   | 'has_candidates'
@@ -37,6 +39,7 @@ export type NotificationType =
   | 'shift_tomorrow'
   | 'shift_in_one_hour'
   | 'new_shift_available'
+  | 'schedule_published'
   | 'urgent_replacement'
   | 'booking_confirmed'
   | 'unfilled_shift'
@@ -132,6 +135,8 @@ export interface ShiftBooking {
   shift_id: string;
   employee_id: string;
   status?: 'confirmed' | 'cancelled';
+  planned_salary?: number | null;
+  actual_salary?: number | null;
   created_at: string;
   employee?: Employee;
 }
@@ -148,7 +153,14 @@ export interface Shift {
   required_employees: number;
   booked_employees?: number;
   shift_type?: string | null;
+  payment_type?: PaymentType | null;
+  /** @deprecated use shift_rate */
   payment_rate?: number | null;
+  shift_rate?: number | null;
+  hourly_rate?: number | null;
+  fixed_rate?: number | null;
+  actual_start_time?: string | null;
+  actual_end_time?: string | null;
   status: ShiftStatus;
   is_urgent: boolean;
   created_at: string;
@@ -182,6 +194,7 @@ export interface Notification {
   body: string;
   status: NotificationStatus;
   related_shift_id?: string;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -190,11 +203,15 @@ export interface Statistics {
   employee_id: string;
   month: string;
   worked_hours: number;
+  planned_hours: number;
+  actual_hours: number;
   worked_shifts: number;
   night_shifts: number;
   absences: number;
   replacements: number;
   expected_salary: number;
+  planned_salary: number;
+  actual_salary: number;
 }
 
 export interface AuthResponse {

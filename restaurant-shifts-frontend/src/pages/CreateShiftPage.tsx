@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { shiftsApi, scheduleApi, type RotationPreset, type ScheduleMode } from '@/api/shifts.api';
 import { useAuthStore, useShiftsStore, useToastStore } from '@/store';
 import { getErrorMessage } from '@/api/client';
+import { PAYMENT_TYPE_LABELS } from '@/utils/shifts';
+import type { PaymentType } from '@/types';
 
 type CreateMode = 'single' | 'template';
 type TemplateKind = 'weekly' | 'rotation' | 'custom_cycle';
@@ -63,7 +65,10 @@ export default function CreateShiftPage() {
   const [endTime, setEndTime] = useState('18:00');
   const [requiredEmployees, setRequiredEmployees] = useState(3);
   const [shiftType, setShiftType] = useState('');
-  const [paymentRate, setPaymentRate] = useState('');
+  const [paymentType, setPaymentType] = useState<PaymentType>('shift');
+  const [shiftRate, setShiftRate] = useState('');
+  const [hourlyRate, setHourlyRate] = useState('');
+  const [fixedRate, setFixedRate] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
   const [rotationPreset, setRotationPreset] = useState<RotationPreset>('5_2');
   const [workDays, setWorkDays] = useState(5);
@@ -91,6 +96,20 @@ export default function CreateShiftPage() {
     );
   };
 
+  const paymentPayload = () => {
+    const base = { payment_type: paymentType };
+    if (paymentType === 'hourly' && hourlyRate) {
+      return { ...base, hourly_rate: Number(hourlyRate) };
+    }
+    if (paymentType === 'fixed' && fixedRate) {
+      return { ...base, fixed_rate: Number(fixedRate) };
+    }
+    if (paymentType === 'shift' && shiftRate) {
+      return { ...base, shift_rate: Number(shiftRate) };
+    }
+    return base;
+  };
+
   const handleCreateSingle = async () => {
     if (!restaurant || !date) {
       push({ type: 'error', title: 'Заповніть дату та час' });
@@ -106,7 +125,7 @@ export default function CreateShiftPage() {
         end_time: end.toISOString(),
         required_employees: requiredEmployees,
         shift_type: shiftType || undefined,
-        payment_rate: paymentRate ? Number(paymentRate) : undefined,
+        ...paymentPayload(),
         is_urgent: isUrgent,
       });
       push({ type: 'success', title: 'Зміну створено' });
@@ -142,7 +161,7 @@ export default function CreateShiftPage() {
         end_time: endTime,
         required_employees: requiredEmployees,
         shift_type: shiftType || undefined,
-        payment_rate: paymentRate ? Number(paymentRate) : undefined,
+        ...paymentPayload(),
         weekdays: mode === 'weekly' ? weekdays : undefined,
         preset: mode === 'rotation' ? rotationPreset : undefined,
         work_days:
@@ -197,14 +216,20 @@ export default function CreateShiftPage() {
         endTime={endTime}
         requiredEmployees={requiredEmployees}
         shiftType={shiftType}
-        paymentRate={paymentRate}
+        paymentType={paymentType}
+        shiftRate={shiftRate}
+        hourlyRate={hourlyRate}
+        fixedRate={fixedRate}
         isUrgent={isUrgent}
         showUrgent={createMode === 'single'}
         onStartTime={setStartTime}
         onEndTime={setEndTime}
         onRequired={setRequiredEmployees}
         onShiftType={setShiftType}
-        onPaymentRate={setPaymentRate}
+        onPaymentType={setPaymentType}
+        onShiftRate={setShiftRate}
+        onHourlyRate={setHourlyRate}
+        onFixedRate={setFixedRate}
         onUrgent={setIsUrgent}
       />
 
@@ -310,14 +335,20 @@ export default function CreateShiftPage() {
 }
 
 function SharedFields({
-  startTime, endTime, requiredEmployees, shiftType, paymentRate, isUrgent, showUrgent,
-  onStartTime, onEndTime, onRequired, onShiftType, onPaymentRate, onUrgent,
+  startTime, endTime, requiredEmployees, shiftType, paymentType,
+  shiftRate, hourlyRate, fixedRate, isUrgent, showUrgent,
+  onStartTime, onEndTime, onRequired, onShiftType, onPaymentType,
+  onShiftRate, onHourlyRate, onFixedRate, onUrgent,
 }: {
   startTime: string; endTime: string; requiredEmployees: number; shiftType: string;
-  paymentRate: string; isUrgent: boolean; showUrgent: boolean;
+  paymentType: PaymentType; shiftRate: string; hourlyRate: string; fixedRate: string;
+  isUrgent: boolean; showUrgent: boolean;
   onStartTime: (v: string) => void; onEndTime: (v: string) => void;
   onRequired: (v: number) => void; onShiftType: (v: string) => void;
-  onPaymentRate: (v: string) => void; onUrgent: (v: boolean) => void;
+  onPaymentType: (v: PaymentType) => void;
+  onShiftRate: (v: string) => void; onHourlyRate: (v: string) => void;
+  onFixedRate: (v: string) => void;
+  onUrgent: (v: boolean) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -335,9 +366,36 @@ function SharedFields({
       <Field label="Тип зміни (необовʼязково)">
         <input className="field-input" placeholder="Денна, нічна..." value={shiftType} onChange={(e) => onShiftType(e.target.value)} />
       </Field>
-      <Field label="Оплата (необовʼязково)">
-        <input className="field-input" type="number" min={0} placeholder="₴" value={paymentRate} onChange={(e) => onPaymentRate(e.target.value)} />
+      <Field label="Тип оплати">
+        <div className="space-y-2">
+          {(['shift', 'hourly', 'fixed'] as PaymentType[]).map((type) => (
+            <label key={type} className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="payment_type"
+                checked={paymentType === type}
+                onChange={() => onPaymentType(type)}
+              />
+              {PAYMENT_TYPE_LABELS[type]}
+            </label>
+          ))}
+        </div>
       </Field>
+      {paymentType === 'shift' && (
+        <Field label="Оплата за зміну (₴)">
+          <input className="field-input" type="number" min={0} placeholder="1200" value={shiftRate} onChange={(e) => onShiftRate(e.target.value)} />
+        </Field>
+      )}
+      {paymentType === 'hourly' && (
+        <Field label="Оплата за годину (₴)">
+          <input className="field-input" type="number" min={0} placeholder="150" value={hourlyRate} onChange={(e) => onHourlyRate(e.target.value)} />
+        </Field>
+      )}
+      {paymentType === 'fixed' && (
+        <Field label="Фіксована ставка за вихід (₴)">
+          <input className="field-input" type="number" min={0} placeholder="500" value={fixedRate} onChange={(e) => onFixedRate(e.target.value)} />
+        </Field>
+      )}
       {showUrgent && (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isUrgent} onChange={(e) => onUrgent(e.target.checked)} />

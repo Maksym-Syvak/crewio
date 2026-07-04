@@ -75,4 +75,11 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   onNotificationCreated(notification: any) {
     this.server.to(`user:${notification.user_id}`).emit('notification_created', notification);
   }
+
+  @OnEvent('ws.schedule_generated')
+  onScheduleGenerated(payload: any) {
+    this.server
+      .to(`restaurant:${payload.restaurant_id}`)
+      .emit('schedule_generated', payload);
+  }
 }

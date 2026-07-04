@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Employee } from './entities/employee.entity';
+import { Employee, EmployeeStatus } from './entities/employee.entity';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { toPaginatedResult } from '../../common/dto/pagination-query.dto';
@@ -55,6 +55,13 @@ export class EmployeesService {
       return { employee: null, restaurant: null };
     }
     return { employee, restaurant: employee.restaurant ?? null };
+  }
+
+  async findActiveByRestaurant(restaurantId: string) {
+    return this.employeesRepo.find({
+      where: { restaurant_id: restaurantId, status: EmployeeStatus.ACTIVE },
+      relations: ['user'],
+    });
   }
 
   create(dto: CreateEmployeeDto) {

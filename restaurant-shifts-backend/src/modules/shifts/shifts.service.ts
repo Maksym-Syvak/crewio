@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Shift, ShiftStatus } from './entities/shift.entity';
+import { Shift, ShiftStatus, PaymentType } from './entities/shift.entity';
 import {
   ShiftBooking,
   ShiftBookingStatus,
@@ -15,7 +15,12 @@ import {
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { GenerateScheduleDto } from './dto/generate-schedule.dto';
+import { CloseShiftDto } from './dto/close-shift.dto';
 import { generateShiftSlots } from './utils/schedule-generator';
+import {
+  calculateActualSalary,
+  calculatePlannedSalary,
+} from './utils/payment-calculator';
 
 const MAX_WEEKLY_HOURS = 60;
 
@@ -100,9 +105,31 @@ export class ShiftsService {
     return shift;
   }
 
+  private resolvePaymentFields(dto: CreateShiftDto) {
+    const paymentType = dto.payment_type ?? PaymentType.SHIFT;
+    const legacyRate = dto.payment_rate ?? null;
+
+    return {
+      payment_type: paymentType,
+      shift_rate:
+        dto.shift_rate ??
+        (paymentType === PaymentType.SHIFT ? legacyRate : null),
+      hourly_rate:
+        dto.hourly_rate ??
+        (paymentType === PaymentType.HOURLY ? legacyRate : null),
+      fixed_rate:
+        dto.fixed_rate ??
+        (paymentType === PaymentType.FIXED ? legacyRate : null),
+      payment_rate: legacyRate,
+    };
+  }
+
   async create(dto: CreateShiftDto) {
     const start = new Date(dto.start_time);
     const end = new Date(dto.end_time);
+    const payment = this.resolvePaymentFields(dto);
+    const isBulk = dto.isBulkCreation === true;
+
     const shift = this.shiftsRepo.create({
       restaurant_id: dto.restaurant_id,
       shift_date: this.toShiftDate(start),
@@ -111,13 +138,16 @@ export class ShiftsService {
       required_employees: dto.required_employees ?? 1,
       booked_employees: 0,
       shift_type: dto.shift_type ?? null,
-      payment_rate: dto.payment_rate ?? null,
+      ...payment,
       status: dto.is_urgent ? ShiftStatus.URGENT : ShiftStatus.OPEN,
       is_urgent: dto.is_urgent ?? false,
     });
     const saved = await this.shiftsRepo.save(shift);
-    this.events.emit('shift.created', saved);
-    if (saved.is_urgent) this.events.emit('shift.emergency', saved);
+
+    if (!isBulk) {
+      this.events.emit('shift.created', saved);
+      if (saved.is_urgent) this.events.emit('shift.emergency', saved);
+    }
     return saved;
   }
 
@@ -125,6 +155,8 @@ export class ShiftsService {
     const slots = generateShiftSlots(dto);
     const created: Shift[] = [];
     let skipped = 0;
+
+    const payment = this.resolvePaymentFields(dto as CreateShiftDto);
 
     for (const slot of slots) {
       if (dto.skip_existing !== false) {
@@ -146,10 +178,25 @@ export class ShiftsService {
         end_time: slot.end_time.toISOString(),
         required_employees: dto.required_employees ?? 1,
         shift_type: dto.shift_type,
-        payment_rate: dto.payment_rate,
+        payment_type: payment.payment_type ?? undefined,
+        shift_rate: payment.shift_rate ?? undefined,
+        hourly_rate: payment.hourly_rate ?? undefined,
+        fixed_rate: payment.fixed_rate ?? undefined,
+        payment_rate: payment.payment_rate ?? undefined,
         is_urgent: false,
+        isBulkCreation: true,
       });
       created.push(shift);
+    }
+
+    if (created.length > 0) {
+      this.events.emit('schedule.generated', {
+        restaurant_id: dto.restaurant_id,
+        count: created.length,
+        date_from: dto.date_from,
+        date_to: dto.date_to,
+        shifts: created,
+      });
     }
 
     return {
@@ -158,6 +205,34 @@ export class ShiftsService {
       total: slots.length,
       shifts: created,
     };
+  }
+
+  async closeShift(id: string, dto: CloseShiftDto) {
+    const shift = await this.findOne(id);
+    const actualStart = new Date(dto.actual_start_time);
+    const actualEnd = new Date(dto.actual_end_time);
+
+    if (actualEnd <= actualStart) {
+      throw new BadRequestException('Фактичний кінець має бути після початку');
+    }
+
+    shift.actual_start_time = actualStart;
+    shift.actual_end_time = actualEnd;
+    shift.status = ShiftStatus.COMPLETED;
+    await this.shiftsRepo.save(shift);
+
+    const bookings =
+      shift.bookings?.filter((b) => b.status === ShiftBookingStatus.CONFIRMED) ??
+      [];
+
+    for (const booking of bookings) {
+      booking.planned_salary = calculatePlannedSalary(shift);
+      booking.actual_salary = calculateActualSalary(shift);
+      await this.bookingsRepo.save(booking);
+    }
+
+    this.events.emit('shift.completed', { shift, employeeIds: bookings.map((b) => b.employee_id) });
+    return this.findOne(id);
   }
 
   async update(id: string, dto: UpdateShiftDto) {

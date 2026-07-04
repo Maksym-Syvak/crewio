@@ -19,6 +19,7 @@ export enum NotificationType {
   SHIFT_TOMORROW = 'shift_tomorrow',
   SHIFT_IN_ONE_HOUR = 'shift_in_one_hour',
   NEW_SHIFT_AVAILABLE = 'new_shift_available',
+  SCHEDULE_PUBLISHED = 'schedule_published',
   URGENT_REPLACEMENT = 'urgent_replacement',
   BOOKING_CONFIRMED = 'booking_confirmed',
   UNFILLED_SHIFT = 'unfilled_shift',
@@ -57,6 +58,9 @@ export class Notification {
   // Optional reference to the entity that triggered this notification
   @Column({ nullable: true })
   related_shift_id: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, unknown> | null;
 
   @CreateDateColumn()
   created_at: Date;

@@ -16,7 +16,11 @@ export class TelegramService {
     return `https://api.telegram.org/bot${token}`;
   }
 
-  async sendMessage(chatId: string | number, text: string) {
+  async sendMessage(
+    chatId: string | number,
+    text: string,
+    options?: { replyMarkup?: Record<string, unknown> },
+  ) {
     const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
     if (!token) {
       this.logger.warn('TELEGRAM_BOT_TOKEN not set — skipping Telegram push');
@@ -27,6 +31,7 @@ export class TelegramService {
         chat_id: chatId,
         text,
         parse_mode: 'HTML',
+        ...(options?.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
       });
       return data;
     } catch (error) {

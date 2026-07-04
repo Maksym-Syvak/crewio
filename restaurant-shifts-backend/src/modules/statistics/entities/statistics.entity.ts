@@ -21,6 +21,12 @@ export class Statistics {
   @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 })
   worked_hours: number;
 
+  @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 })
+  planned_hours: number;
+
+  @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 })
+  actual_hours: number;
+
   @Column({ default: 0 })
   worked_shifts: number;
 
@@ -35,4 +41,10 @@ export class Statistics {
 
   @Column({ type: 'numeric', precision: 12, scale: 2, default: 0 })
   expected_salary: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0 })
+  planned_salary: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0 })
+  actual_salary: number;
 }

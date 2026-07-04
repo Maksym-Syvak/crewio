@@ -27,8 +27,24 @@ export function connectSocket(restaurantId?: string, userId?: string) {
 
   socket.on('shift_created', (shift: Shift) => {
     upsertShift(shift);
-    push({ type: 'info', title: 'Нова зміна', body: shift.position?.name });
+    if (shift.is_urgent) {
+      push({ type: 'urgent', title: '🚨 Термінова зміна', body: shift.shift_type ?? 'Нова зміна' });
+    } else {
+      push({ type: 'info', title: 'Нова зміна', body: shift.shift_type ?? undefined });
+    }
   });
+
+  socket.on(
+    'schedule_generated',
+    (payload: { count: number; date_from: string; date_to: string; shifts: Shift[] }) => {
+      for (const shift of payload.shifts) upsertShift(shift);
+      push({
+        type: 'info',
+        title: '📅 Додано новий графік',
+        body: `${payload.count} змін`,
+      });
+    },
+  );
 
   socket.on('shift_updated', (shift: Shift) => upsertShift(shift));
 
@@ -38,8 +54,8 @@ export function connectSocket(restaurantId?: string, userId?: string) {
     upsertShift(shift);
     push({
       type: 'urgent',
-      title: 'Термінова заміна!',
-      body: `${shift.restaurant?.name ?? 'Зміна'} — ${shift.position?.name ?? ''}`,
+      title: '🚨 Термінова зміна',
+      body: shift.shift_type ?? 'Потрібна заміна',
     });
   });
 

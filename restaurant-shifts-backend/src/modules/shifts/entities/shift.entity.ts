@@ -21,6 +21,12 @@ export enum ShiftStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum PaymentType {
+  SHIFT = 'shift',
+  HOURLY = 'hourly',
+  FIXED = 'fixed',
+}
+
 @Entity('shifts')
 export class Shift {
   @PrimaryGeneratedColumn('uuid')
@@ -53,8 +59,27 @@ export class Shift {
   @Column({ type: 'varchar', nullable: true })
   shift_type: string | null;
 
+  @Column({ type: 'enum', enum: PaymentType, default: PaymentType.SHIFT, nullable: true })
+  payment_type: PaymentType | null;
+
+  /** @deprecated use shift_rate */
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   payment_rate: number | null;
+
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  shift_rate: number | null;
+
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  hourly_rate: number | null;
+
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  fixed_rate: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  actual_start_time: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  actual_end_time: Date | null;
 
   @Column({ type: 'enum', enum: ShiftStatus, default: ShiftStatus.OPEN })
   status: ShiftStatus;
