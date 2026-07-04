@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Restaurant } from './entities/restaurant.entity';
@@ -6,6 +6,7 @@ import { CreateRestaurantDto, ImportRestaurantFromGoogleDto } from './dto/create
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 import { GooglePlacesService } from './google-places.service';
 import { PositionsService } from '../positions/positions.service';
+import { isRestaurantProfileComplete } from './restaurant-profile.util';
 
 @Injectable()
 export class RestaurantsService {
@@ -33,6 +34,8 @@ export class RestaurantsService {
   }
 
   async create(ownerId: string, dto: CreateRestaurantDto) {
+    this.assertRequiredCreateFields(dto);
+
     const working_hours =
       dto.working_hours ??
       (dto.open_time && dto.close_time
@@ -42,7 +45,7 @@ export class RestaurantsService {
     const restaurant = this.restaurantsRepo.create({
       name: dto.name,
       type: dto.type,
-      address: dto.address,
+      address: dto.address?.trim() || '',
       city: dto.city,
       region: dto.region,
       country: dto.country,
@@ -101,5 +104,27 @@ export class RestaurantsService {
       throw new ForbiddenException('Немає доступу до цього закладу');
     }
     return repairBookings(restaurantId);
+  }
+
+  assertRequiredCreateFields(dto: CreateRestaurantDto) {
+    if (!dto.city?.trim()) {
+      throw new BadRequestException('Вкажіть місто');
+    }
+    if (!dto.region?.trim()) {
+      throw new BadRequestException('Вкажіть область');
+    }
+    if (!dto.country?.trim()) {
+      throw new BadRequestException('Вкажіть країну');
+    }
+    if (!dto.open_time?.trim() || !dto.close_time?.trim()) {
+      throw new BadRequestException('Вкажіть графік роботи');
+    }
+    if (!dto.employees_limit || dto.employees_limit < 1) {
+      throw new BadRequestException('Вкажіть кількість працівників');
+    }
+  }
+
+  isProfileComplete(restaurant: Restaurant) {
+    return isRestaurantProfileComplete(restaurant);
   }
 }

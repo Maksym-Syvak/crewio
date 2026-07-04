@@ -173,6 +173,10 @@ export async function ensureOnboardingProfileComplete() {
   const { user, completeProfile } = useAuthStore.getState();
   const { profileData, selectedRole } = useOnboardingStore.getState();
 
+  if (user?.is_profile_completed) {
+    return;
+  }
+
   if (!profileData || !selectedRole) {
     throw new Error('Спочатку заповніть профіль');
   }

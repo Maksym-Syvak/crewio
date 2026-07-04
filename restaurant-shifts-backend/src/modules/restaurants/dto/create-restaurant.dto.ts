@@ -16,20 +16,18 @@ export class CreateRestaurantDto {
   @IsEnum(RestaurantType)
   type: RestaurantType;
 
-  @IsString()
-  address: string;
-
   @IsOptional()
   @IsString()
-  city?: string;
+  address?: string;
 
-  @IsOptional()
   @IsString()
-  region?: string;
+  city: string;
 
-  @IsOptional()
   @IsString()
-  country?: string;
+  region: string;
+
+  @IsString()
+  country: string;
 
   @IsOptional()
   @IsString()

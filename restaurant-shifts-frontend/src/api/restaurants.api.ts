@@ -4,15 +4,15 @@ import type { InvitationToken, InvitePreview, Restaurant, RestaurantType } from 
 export interface CreateRestaurantPayload {
   name: string;
   type: RestaurantType;
-  address: string;
-  city?: string;
-  region?: string;
-  country?: string;
+  address?: string;
+  city: string;
+  region: string;
+  country: string;
   phone?: string;
   email?: string;
   website?: string;
-  open_time?: string;
-  close_time?: string;
+  open_time: string;
+  close_time: string;
   employees_limit?: number;
 }
 
