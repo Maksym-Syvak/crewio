@@ -69,7 +69,7 @@ export default function StatisticsPage() {
         </p>
         {staff.length === 0 ? (
           <p className="text-center text-sm text-[var(--tg-hint)]">
-            Персонал ще не додано
+            У закладі ще немає співробітників
           </p>
         ) : (
           <ul className="space-y-2">
@@ -105,6 +105,7 @@ export default function StatisticsPage() {
 
   const current = stats[0] ?? {
     worked_shifts: 0,
+    booked_shifts: 0,
     planned_hours: 0,
     actual_hours: 0,
     worked_hours: 0,
@@ -114,7 +115,8 @@ export default function StatisticsPage() {
     replacements: 0,
   };
 
-  const maxShifts = Math.max(current.worked_shifts, 10);
+  const bookedShifts = current.booked_shifts ?? current.worked_shifts;
+  const maxShifts = Math.max(bookedShifts, 10);
 
   return (
     <div className="page">
@@ -131,15 +133,16 @@ export default function StatisticsPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Stat label="Змін" value={current.worked_shifts} />
-        <Stat label="Заплановано год" value={Number(current.planned_hours ?? current.worked_hours).toFixed(1)} />
-        <Stat label="Фактично год" value={Number(current.actual_hours ?? current.worked_hours).toFixed(1)} />
+        <Stat label="Заброньовано змін" value={bookedShifts} />
+        <Stat label="Відпрацьовано змін" value={current.worked_shifts} />
+        <Stat label="Заплановано годин" value={Number(current.planned_hours).toFixed(1)} />
+        <Stat label="Відпрацьовано годин" value={Number(current.actual_hours).toFixed(1)} />
         <Stat label="Замін" value={current.replacements} />
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <Stat label="Запланована зарплата" value={`${Math.round(Number(current.planned_salary ?? current.expected_salary))} ₴`} />
-        <Stat label="Зароблено" value={`${Math.round(Number(current.actual_salary ?? current.expected_salary))} ₴`} />
+        <Stat label="Запланована зарплата" value={`${Math.round(Number(current.planned_salary))} ₴`} />
+        <Stat label="Зароблено" value={`${Math.round(Number(current.actual_salary))} ₴`} />
       </div>
 
       <section className="card mt-6">
@@ -147,7 +150,7 @@ export default function StatisticsPage() {
         <div className="flex h-32 items-end gap-2">
           {Array.from({ length: 4 }).map((_, i) => {
             const h = Math.round(
-              (current.worked_shifts / maxShifts) * 100 * (1 - i * 0.15),
+              (bookedShifts / maxShifts) * 100 * (1 - i * 0.15),
             );
             return (
               <div key={i} className="flex flex-1 flex-col items-center gap-1">

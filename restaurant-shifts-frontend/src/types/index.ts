@@ -210,6 +210,7 @@ export interface Statistics {
   planned_hours: number;
   actual_hours: number;
   worked_shifts: number;
+  booked_shifts?: number;
   night_shifts: number;
   absences: number;
   replacements: number;

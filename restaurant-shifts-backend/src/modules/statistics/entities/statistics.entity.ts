@@ -31,6 +31,9 @@ export class Statistics {
   worked_shifts: number;
 
   @Column({ default: 0 })
+  booked_shifts: number;
+
+  @Column({ default: 0 })
   night_shifts: number;
 
   @Column({ default: 0 })

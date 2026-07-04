@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { employeesApi } from '@/api/employees.api';
-import { getErrorMessage } from '@/api/client';
 import { useAuthStore } from '@/store';
 import type { Employee } from '@/types';
 import { PageSkeleton } from '@/components/Skeleton';
 
 const PAGE_SIZE = 20;
+
+const STAFF_LOAD_ERROR =
+  'Не вдалося завантажити список співробітників.\nСпробуйте пізніше.';
 
 export default function StaffPage() {
   const restaurant = useAuthStore((s) => s.restaurant);
@@ -32,9 +34,9 @@ export default function StaffPage() {
         setStaff((prev) => (append ? [...prev, ...res.data] : res.data));
         setHasMore(res.meta.hasMore);
         setPage(pageNum);
-      } catch (e) {
+      } catch {
         if (!append) setStaff([]);
-        setError(getErrorMessage(e));
+        setError(STAFF_LOAD_ERROR);
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -93,7 +95,7 @@ export default function StaffPage() {
         </Link>
       </div>
       {error && (
-        <p className="mb-3 rounded-lg bg-[var(--crew-red)]/10 px-3 py-2 text-sm text-[var(--crew-red)]">
+        <p className="mb-3 whitespace-pre-line rounded-lg bg-[var(--crew-red)]/10 px-3 py-2 text-sm text-[var(--crew-red)]">
           {error}
         </p>
       )}
@@ -130,7 +132,7 @@ export default function StaffPage() {
       </ul>
       {!loading && staff.length === 0 && !error && (
         <p className="text-center text-sm text-[var(--tg-hint)]">
-          Персонал порожній
+          У закладі ще немає співробітників
         </p>
       )}
       {hasMore && <div ref={sentinelRef} className="h-8" />}

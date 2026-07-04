@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -6,7 +6,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
 
 @ApiTags('employees')
 @ApiBearerAuth()
@@ -18,21 +18,17 @@ export class EmployeesController {
   @Get()
   async findAll(
     @Req() req: { user: { sub: string; role: string } },
-    @Query('restaurantId') restaurantId?: string,
-    @Query() pagination?: PaginationQueryDto,
+    @Query() query: ListEmployeesQueryDto,
   ) {
-    if (!restaurantId) {
-      throw new BadRequestException('restaurantId is required');
-    }
     await this.employeesService.assertCanViewRestaurantStaff(
       req.user.sub,
       req.user.role,
-      restaurantId,
+      query.restaurantId,
     );
     return this.employeesService.findAll(
-      restaurantId,
-      pagination?.page ?? 1,
-      pagination?.limit ?? 20,
+      query.restaurantId,
+      query.page ?? 1,
+      query.limit ?? 20,
     );
   }
 
