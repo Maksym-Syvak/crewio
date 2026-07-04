@@ -9,6 +9,7 @@ import {
   isShiftFull,
   isShiftUrgent,
 } from '@/utils/shifts';
+import { isAdminRole } from '@/utils/roles';
 import {
   ShiftBookingForm,
   ShiftBookingStatus,
@@ -25,8 +26,11 @@ interface Props {
 export function ShiftModal({ shift: initialShift, onClose, onUpdated }: Props) {
   const [shift, setShift] = useState(initialShift);
   const employee = useAuthStore((s) => s.employee);
+  const user = useAuthStore((s) => s.user);
   const upsertShift = useShiftsStore((s) => s.upsertShift);
   const push = useToastStore((s) => s.push);
+
+  const isAdmin = Boolean(user && isAdminRole(user.role));
 
   const pay = getShiftPayLabel(shift);
   const isBooked = isEmployeeBooked(shift, employee?.id);
@@ -38,6 +42,12 @@ export function ShiftModal({ shift: initialShift, onClose, onUpdated }: Props) {
     upsertShift(updated);
     onUpdated?.(updated);
     push({ type: 'success', title: 'Зміну заброньовано' });
+  };
+
+  const handleShiftUpdated = (updated: Shift) => {
+    setShift(updated);
+    upsertShift(updated);
+    onUpdated?.(updated);
   };
 
   return (
@@ -80,11 +90,16 @@ export function ShiftModal({ shift: initialShift, onClose, onUpdated }: Props) {
               <dd>{pay}</dd>
             </div>
           )}
-          <ShiftSlotsInfo shift={shift} />
+          <ShiftSlotsInfo
+            shift={shift}
+            editable={isAdmin}
+            onUpdated={handleShiftUpdated}
+            onError={(msg) => push({ type: 'error', title: msg })}
+          />
         </dl>
 
         <div className="mt-4 space-y-3">
-          <ShiftBookingStatus shift={shift} employeeId={employee?.id} />
+          <ShiftBookingStatus shift={shift} employeeId={employee?.id} isAdmin={isAdmin} />
 
           {bookable && employee && (
             <div className="card">

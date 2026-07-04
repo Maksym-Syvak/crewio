@@ -368,7 +368,7 @@ export class ShiftsService {
       const booked = this.activeBookingsCount(existing);
       if (dto.required_employees < booked) {
         throw new BadRequestException(
-          'Не можна встановити менше місць, ніж уже заброньовано',
+          'Неможливо встановити кількість працівників меншу за кількість вже заброньованих.',
         );
       }
     }

@@ -8,11 +8,15 @@ import { cn } from '@/utils/cn';
 import { isAdminRole } from '@/utils/roles';
 import {
   getAvailableSlots,
+  getBookingLegendLabels,
   getEmployeeBooking,
+  getShiftBookingBadgeLabel,
   getShiftBookings,
-  isEmployeeBooked,
+  getShiftDisplayVariant,
+  hasStaffBookings,
   isPartialBooking,
   isShiftUrgent,
+  shiftHasPartialBookings,
 } from '@/utils/shifts';
 
 export default function CalendarPage() {
@@ -74,13 +78,21 @@ export default function CalendarPage() {
     const shiftsOnDay = shiftsByDay.get(key) ?? [];
     if (!shiftsOnDay.length) return 'dayoff';
 
-    const myBooking = shiftsOnDay
-      .map((s) => getEmployeeBooking(s, employee?.id))
-      .find(Boolean);
+    if (isAdmin) {
+      const withBookings = shiftsOnDay.filter(hasStaffBookings);
+      if (withBookings.length) {
+        return withBookings.some(shiftHasPartialBookings) ? 'minePartial' : 'mine';
+      }
+    } else {
+      const myBooking = shiftsOnDay
+        .map((s) => getEmployeeBooking(s, employee?.id))
+        .find(Boolean);
 
-    if (myBooking) {
-      return isPartialBooking(myBooking) ? 'minePartial' : 'mine';
+      if (myBooking) {
+        return isPartialBooking(myBooking) ? 'minePartial' : 'mine';
+      }
     }
+
     if (shiftsOnDay.some((s) => isShiftUrgent(s))) return 'urgent';
     if (shiftsOnDay.some((s) => getAvailableSlots(s) > 0)) return 'available';
     return 'dayoff';
@@ -94,13 +106,10 @@ export default function CalendarPage() {
     dayoff: 'bg-[var(--crew-gray)]',
   };
 
-  const getShiftVariant = (shift: Shift) => {
-    const myBooking = getEmployeeBooking(shift, employee?.id);
-    if (myBooking) return isPartialBooking(myBooking) ? ('minePartial' as const) : ('mine' as const);
-    if (isShiftUrgent(shift)) return 'urgent' as const;
-    if (getAvailableSlots(shift) === 0) return 'dayoff' as const;
-    return 'available' as const;
-  };
+  const legend = getBookingLegendLabels(isAdmin);
+
+  const getShiftVariant = (shift: Shift) =>
+    getShiftDisplayVariant(shift, { isAdmin, employeeId: employee?.id });
 
   const shiftCardVariant = {
     mine: 'border-l-4 border-l-[var(--crew-green)]',
@@ -166,8 +175,8 @@ export default function CalendarPage() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs">
-        <Legend color={dotColor.mine} label="Моя зміна (повна)" />
-        <Legend color={dotColor.minePartial} label="Моя зміна (часткова)" />
+        <Legend color={dotColor.mine} label={legend.full} />
+        <Legend color={dotColor.minePartial} label={legend.partial} />
         <Legend color={dotColor.available} label="Доступна" />
         <Legend color={dotColor.urgent} label="Термінова" />
       </div>
@@ -184,7 +193,10 @@ export default function CalendarPage() {
                 <h3 className="text-sm font-medium text-[var(--tg-hint)]">Зміни</h3>
                 {dayShifts.map((shift) => {
                   const variant = getShiftVariant(shift);
-                  const booked = isEmployeeBooked(shift, employee?.id);
+                  const badgeLabel = getShiftBookingBadgeLabel(shift, {
+                    isAdmin,
+                    employeeId: employee?.id,
+                  });
                   return (
                     <button
                       key={shift.id}
@@ -195,9 +207,16 @@ export default function CalendarPage() {
                       <div className={cn('card', shiftCardVariant[variant])}>
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold">{shift.shift_type || 'Зміна'}</span>
-                          {booked && (
-                            <span className="text-xs font-medium text-[var(--crew-green)]">
-                              Ваша зміна
+                          {badgeLabel && (
+                            <span
+                              className={cn(
+                                'text-xs font-medium',
+                                variant === 'minePartial'
+                                  ? 'text-[var(--crew-amber)]'
+                                  : 'text-[var(--crew-green)]',
+                              )}
+                            >
+                              {badgeLabel}
                             </span>
                           )}
                         </div>

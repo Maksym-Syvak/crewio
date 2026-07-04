@@ -108,25 +108,10 @@ export default function ShiftDetailPage() {
     }
   };
 
-  const handleChangeRequired = async () => {
-    if (!shift) return;
-    const raw = prompt('Нова кількість працівників:', String(shift.required_employees));
-    if (!raw) return;
-    const next = Number(raw);
-    if (!Number.isFinite(next) || next < 1) {
-      push({ type: 'error', title: 'Некоректне число' });
-      return;
-    }
-    setActing(true);
-    try {
-      const updated = await shiftsApi.update(shift.id, { required_employees: next });
-      setShift(updated);
-      push({ type: 'success', title: 'Оновлено' });
-    } catch (e) {
-      push({ type: 'error', title: getErrorMessage(e) });
-    } finally {
-      setActing(false);
-    }
+  const handleShiftUpdated = (updated: Shift) => {
+    setShift(updated);
+    upsertShift(updated);
+    push({ type: 'success', title: 'Кількість працівників оновлено' });
   };
 
   if (loading) return <PageSkeleton />;
@@ -166,7 +151,12 @@ export default function ShiftDetailPage() {
         <Row label="Тривалість" value={`${hours.toFixed(1)} год`} />
         {pay && <Row label="Ставка" value={pay} />}
         <Row label="Статус" value={getShiftStatusLabel(shift.status)} />
-        <ShiftSlotsInfo shift={shift} />
+        <ShiftSlotsInfo
+          shift={shift}
+          editable={isAdmin}
+          onUpdated={handleShiftUpdated}
+          onError={(msg) => push({ type: 'error', title: msg })}
+        />
         {isCompleted && myBooking && calculateBookingPayPreview(shift, myBooking) && (
           <Row label="Нараховано" value={calculateBookingPayPreview(shift, myBooking)!} />
         )}
@@ -182,7 +172,7 @@ export default function ShiftDetailPage() {
       )}
 
       <div className="mt-6 space-y-2">
-        <ShiftBookingStatus shift={shift} employeeId={employee?.id} />
+        <ShiftBookingStatus shift={shift} employeeId={employee?.id} isAdmin={isAdmin} />
 
         {employee && !isBooked && !full && bookable && (
           <div className="card">
@@ -205,17 +195,10 @@ export default function ShiftDetailPage() {
             Відгукнутись на заміну
           </button>
         )}
-        {isAdmin && (
-          <>
-            <button type="button" className="btn-secondary" disabled={acting} onClick={handleChangeRequired}>
-              Змінити кількість працівників
-            </button>
-            {!isCompleted && shift.status !== 'active' && (
-              <button type="button" className="btn-secondary" disabled={acting} onClick={handleMarkDayOff}>
-                Зробити вихідним
-              </button>
-            )}
-          </>
+        {isAdmin && !isCompleted && shift.status !== 'active' && (
+          <button type="button" className="btn-secondary" disabled={acting} onClick={handleMarkDayOff}>
+            Зробити вихідним
+          </button>
         )}
       </div>
     </div>

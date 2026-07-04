@@ -57,6 +57,68 @@ export function getEmployeeBooking(
   );
 }
 
+export function hasStaffBookings(shift: Shift): boolean {
+  return getBookedCount(shift) > 0;
+}
+
+export function shiftHasPartialBookings(shift: Shift): boolean {
+  return getShiftBookings(shift).some(
+    (b) => b.status !== 'cancelled' && isPartialBooking(b),
+  );
+}
+
+export type ShiftDisplayVariant = 'mine' | 'minePartial' | 'available' | 'urgent' | 'dayoff';
+
+export function getShiftDisplayVariant(
+  shift: Shift,
+  options: { isAdmin: boolean; employeeId?: string },
+): ShiftDisplayVariant {
+  const { isAdmin, employeeId } = options;
+
+  if (!isAdmin) {
+    const myBooking = getEmployeeBooking(shift, employeeId);
+    if (myBooking) {
+      return isPartialBooking(myBooking) ? 'minePartial' : 'mine';
+    }
+  } else if (hasStaffBookings(shift)) {
+    return shiftHasPartialBookings(shift) ? 'minePartial' : 'mine';
+  }
+
+  if (isShiftUrgent(shift)) return 'urgent';
+  if (getAvailableSlots(shift) === 0) return 'dayoff';
+  return 'available';
+}
+
+export function getShiftBookingBadgeLabel(
+  shift: Shift,
+  options: { isAdmin: boolean; employeeId?: string },
+): string | null {
+  const { isAdmin, employeeId } = options;
+
+  if (!isAdmin) {
+    if (!isEmployeeBooked(shift, employeeId)) return null;
+    const booking = getEmployeeBooking(shift, employeeId);
+    if (booking && isPartialBooking(booking)) return 'Моя зміна (часткова)';
+    return 'Моя зміна';
+  }
+
+  if (!hasStaffBookings(shift)) return null;
+  return shiftHasPartialBookings(shift) ? 'Частково заброньована' : 'Заброньована';
+}
+
+export function getBookingLegendLabels(isAdmin: boolean) {
+  if (isAdmin) {
+    return {
+      full: 'Заброньована',
+      partial: 'Частково заброньована',
+    };
+  }
+  return {
+    full: 'Моя зміна (повна)',
+    partial: 'Моя зміна (часткова)',
+  };
+}
+
 /** Left accent border — full matches "Моя зміна", partial uses amber */
 export const BOOKING_ACCENT = {
   full: 'border-l-4 border-l-[var(--crew-green)]',

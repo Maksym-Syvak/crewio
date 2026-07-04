@@ -7,9 +7,13 @@ import {
   canBookShift,
   getAvailableSlots,
   getBookedCount,
-  isEmployeeBooked,
+  getEmployeeBooking,
+  getShiftBookingBadgeLabel,
+  isPartialBooking,
   isShiftFull,
+  shiftHasPartialBookings,
 } from '@/utils/shifts';
+import { RequiredEmployeesEditor } from '@/components/RequiredEmployeesEditor';
 
 interface Props {
   shift: Shift;
@@ -102,18 +106,33 @@ export function ShiftBookingForm({ shift, employeeId, onBooked, onError }: Props
 export function ShiftBookingStatus({
   shift,
   employeeId,
+  isAdmin = false,
 }: {
   shift: Shift;
   employeeId?: string;
+  isAdmin?: boolean;
 }) {
   const full = isShiftFull(shift);
-  const isBooked = isEmployeeBooked(shift, employeeId);
   const bookable = canBookShift(shift);
+  const badgeLabel = getShiftBookingBadgeLabel(shift, { isAdmin, employeeId });
 
-  if (isBooked) {
+  if (badgeLabel) {
+    const booking = getEmployeeBooking(shift, employeeId);
+    const partial = isAdmin
+      ? shiftHasPartialBookings(shift)
+      : booking
+        ? isPartialBooking(booking)
+        : false;
+
     return (
-      <div className="rounded-lg border border-[var(--crew-green)] bg-[color-mix(in_srgb,var(--crew-green)_8%,transparent)] px-4 py-3 text-center text-sm font-semibold text-[var(--crew-green)]">
-        Ваша зміна
+      <div
+        className={
+          partial
+            ? 'rounded-lg border border-[var(--crew-amber)] bg-[color-mix(in_srgb,var(--crew-amber)_8%,transparent)] px-4 py-3 text-center text-sm font-semibold text-[var(--crew-amber)]'
+            : 'rounded-lg border border-[var(--crew-green)] bg-[color-mix(in_srgb,var(--crew-green)_8%,transparent)] px-4 py-3 text-center text-sm font-semibold text-[var(--crew-green)]'
+        }
+      >
+        {badgeLabel}
       </div>
     );
   }
@@ -129,13 +148,27 @@ export function ShiftBookingStatus({
   return null;
 }
 
-export function ShiftSlotsInfo({ shift }: { shift: Shift }) {
+export function ShiftSlotsInfo({
+  shift,
+  editable,
+  onUpdated,
+  onError,
+}: {
+  shift: Shift;
+  editable?: boolean;
+  onUpdated?: (shift: Shift) => void;
+  onError?: (message: string) => void;
+}) {
   const booked = getBookedCount(shift);
   const available = getAvailableSlots(shift);
 
   return (
     <>
-      <InfoRow label="Необхідно працівників" value={String(shift.required_employees)} />
+      {editable && onUpdated && onError ? (
+        <RequiredEmployeesEditor shift={shift} onUpdated={onUpdated} onError={onError} />
+      ) : (
+        <InfoRow label="Необхідно працівників" value={String(shift.required_employees)} />
+      )}
       <InfoRow label="Заброньовано" value={String(booked)} />
       <InfoRow label="Вільних місць" value={String(available)} highlight />
     </>

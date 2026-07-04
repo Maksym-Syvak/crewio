@@ -7,10 +7,8 @@ import { PageSkeleton } from '@/components/Skeleton';
 import type { Shift } from '@/types';
 import { isAdminRole } from '@/utils/roles';
 import {
-  getAvailableSlots,
-  getEmployeeBooking,
+  getShiftDisplayVariant,
   isEmployeeBooked,
-  isPartialBooking,
   isShiftFull,
 } from '@/utils/shifts';
 
@@ -53,15 +51,8 @@ export default function ShiftsPage() {
     return list;
   }, [shifts, tab, sort, employee?.id]);
 
-  const getVariant = (s: Shift) => {
-    if (s.is_urgent || s.status === 'urgent') return 'urgent' as const;
-    const myBooking = getEmployeeBooking(s, employee?.id);
-    if (myBooking) {
-      return isPartialBooking(myBooking) ? ('minePartial' as const) : ('mine' as const);
-    }
-    if (getAvailableSlots(s) === 0) return 'dayoff' as const;
-    return 'available' as const;
-  };
+  const getVariant = (s: Shift) =>
+    getShiftDisplayVariant(s, { isAdmin, employeeId: employee?.id });
 
   if (isLoading && !shifts.length) return <PageSkeleton />;
 
