@@ -7,16 +7,16 @@ import type { Shift, ShiftBooking } from '@/types';
 import { cn } from '@/utils/cn';
 import { isAdminRole } from '@/utils/roles';
 import {
+  getAdminStaffingStatus,
+  getAdminStaffingTextClass,
   getAvailableSlots,
   getBookingLegendLabels,
   getEmployeeBooking,
   getShiftBookingBadgeLabel,
   getShiftBookings,
   getShiftDisplayVariant,
-  hasStaffBookings,
   isPartialBooking,
   isShiftUrgent,
-  shiftHasPartialBookings,
 } from '@/utils/shifts';
 
 export default function CalendarPage() {
@@ -79,10 +79,11 @@ export default function CalendarPage() {
     if (!shiftsOnDay.length) return 'dayoff';
 
     if (isAdmin) {
-      const withBookings = shiftsOnDay.filter(hasStaffBookings);
-      if (withBookings.length) {
-        return withBookings.some(shiftHasPartialBookings) ? 'minePartial' : 'mine';
-      }
+      const statuses = shiftsOnDay.map(getAdminStaffingStatus);
+      if (statuses.some((s) => s === 'urgent')) return 'urgent';
+      if (statuses.some((s) => s === 'partial')) return 'minePartial';
+      if (statuses.some((s) => s === 'full')) return 'mine';
+      if (statuses.some((s) => s === 'unbooked')) return 'available';
     } else {
       const myBooking = shiftsOnDay
         .map((s) => getEmployeeBooking(s, employee?.id))
@@ -177,7 +178,7 @@ export default function CalendarPage() {
       <div className="mt-4 flex flex-wrap gap-3 text-xs">
         <Legend color={dotColor.mine} label={legend.full} />
         <Legend color={dotColor.minePartial} label={legend.partial} />
-        <Legend color={dotColor.available} label="Доступна" />
+        <Legend color={dotColor.available} label={legend.open} />
         <Legend color={dotColor.urgent} label="Термінова" />
       </div>
 
@@ -197,6 +198,7 @@ export default function CalendarPage() {
                     isAdmin,
                     employeeId: employee?.id,
                   });
+                  const adminStatus = isAdmin ? getAdminStaffingStatus(shift) : null;
                   return (
                     <button
                       key={shift.id}
@@ -211,9 +213,11 @@ export default function CalendarPage() {
                             <span
                               className={cn(
                                 'text-xs font-medium',
-                                variant === 'minePartial'
-                                  ? 'text-[var(--crew-amber)]'
-                                  : 'text-[var(--crew-green)]',
+                                isAdmin && adminStatus
+                                  ? getAdminStaffingTextClass(adminStatus)
+                                  : variant === 'minePartial'
+                                    ? 'text-[var(--crew-amber)]'
+                                    : 'text-[var(--crew-green)]',
                               )}
                             >
                               {badgeLabel}

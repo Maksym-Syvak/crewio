@@ -67,6 +67,63 @@ export function shiftHasPartialBookings(shift: Shift): boolean {
   );
 }
 
+export function countBookingTypes(shift: Shift) {
+  const active = getShiftBookings(shift).filter((b) => b.status !== 'cancelled');
+  return {
+    full: active.filter((b) => !isPartialBooking(b)).length,
+    partial: active.filter((b) => isPartialBooking(b)).length,
+  };
+}
+
+export type AdminStaffingStatus = 'unbooked' | 'partial' | 'full' | 'urgent';
+
+export function getAdminStaffingStatus(shift: Shift): AdminStaffingStatus {
+  const booked = getBookedCount(shift);
+  const required = shift.required_employees;
+
+  if (booked < required && isShiftUrgent(shift)) return 'urgent';
+  if (booked === 0) return 'unbooked';
+  if (booked >= required) return 'full';
+  return 'partial';
+}
+
+export const ADMIN_STAFFING_LABELS: Record<AdminStaffingStatus, string> = {
+  unbooked: 'Не заброньована',
+  partial: 'Частково заброньована',
+  full: 'Заброньована',
+  urgent: 'Термінова',
+};
+
+export function getAdminStaffingLabel(status: AdminStaffingStatus): string {
+  return ADMIN_STAFFING_LABELS[status];
+}
+
+export function getAdminStaffingBadgeClasses(status: AdminStaffingStatus): string {
+  switch (status) {
+    case 'urgent':
+      return 'border-[var(--crew-red)] bg-[color-mix(in_srgb,var(--crew-red)_8%,transparent)] text-[var(--crew-red)]';
+    case 'full':
+      return 'border-[var(--crew-green)] bg-[color-mix(in_srgb,var(--crew-green)_8%,transparent)] text-[var(--crew-green)]';
+    case 'partial':
+      return 'border-[var(--crew-amber)] bg-[color-mix(in_srgb,var(--crew-amber)_8%,transparent)] text-[var(--crew-amber)]';
+    case 'unbooked':
+      return 'border-[var(--tg-hint)] bg-[var(--tg-secondary-bg)] text-[var(--tg-hint)]';
+  }
+}
+
+export function getAdminStaffingTextClass(status: AdminStaffingStatus): string {
+  switch (status) {
+    case 'urgent':
+      return 'text-[var(--crew-red)]';
+    case 'full':
+      return 'text-[var(--crew-green)]';
+    case 'partial':
+      return 'text-[var(--crew-amber)]';
+    case 'unbooked':
+      return 'text-[var(--tg-hint)]';
+  }
+}
+
 export type ShiftDisplayVariant = 'mine' | 'minePartial' | 'available' | 'urgent' | 'dayoff';
 
 export function getShiftDisplayVariant(
@@ -80,8 +137,17 @@ export function getShiftDisplayVariant(
     if (myBooking) {
       return isPartialBooking(myBooking) ? 'minePartial' : 'mine';
     }
-  } else if (hasStaffBookings(shift)) {
-    return shiftHasPartialBookings(shift) ? 'minePartial' : 'mine';
+  } else {
+    switch (getAdminStaffingStatus(shift)) {
+      case 'urgent':
+        return 'urgent';
+      case 'full':
+        return 'mine';
+      case 'partial':
+        return 'minePartial';
+      case 'unbooked':
+        return 'available';
+    }
   }
 
   if (isShiftUrgent(shift)) return 'urgent';
@@ -95,15 +161,14 @@ export function getShiftBookingBadgeLabel(
 ): string | null {
   const { isAdmin, employeeId } = options;
 
-  if (!isAdmin) {
-    if (!isEmployeeBooked(shift, employeeId)) return null;
-    const booking = getEmployeeBooking(shift, employeeId);
-    if (booking && isPartialBooking(booking)) return 'Моя зміна (часткова)';
-    return 'Моя зміна';
+  if (isAdmin) {
+    return getAdminStaffingLabel(getAdminStaffingStatus(shift));
   }
 
-  if (!hasStaffBookings(shift)) return null;
-  return shiftHasPartialBookings(shift) ? 'Частково заброньована' : 'Заброньована';
+  if (!isEmployeeBooked(shift, employeeId)) return null;
+  const booking = getEmployeeBooking(shift, employeeId);
+  if (booking && isPartialBooking(booking)) return 'Моя зміна (часткова)';
+  return 'Моя зміна';
 }
 
 export function getBookingLegendLabels(isAdmin: boolean) {
@@ -111,12 +176,14 @@ export function getBookingLegendLabels(isAdmin: boolean) {
     return {
       full: 'Заброньована',
       partial: 'Частково заброньована',
-    };
+      open: 'Не заброньована',
+    } as const;
   }
   return {
     full: 'Моя зміна (повна)',
     partial: 'Моя зміна (часткова)',
-  };
+    open: 'Доступна',
+  } as const;
 }
 
 /** Left accent border — full matches "Моя зміна", partial uses amber */

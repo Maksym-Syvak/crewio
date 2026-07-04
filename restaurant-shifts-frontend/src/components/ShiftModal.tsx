@@ -93,6 +93,7 @@ export function ShiftModal({ shift: initialShift, onClose, onUpdated }: Props) {
           <ShiftSlotsInfo
             shift={shift}
             editable={isAdmin}
+            showBookingBreakdown={isAdmin}
             onUpdated={handleShiftUpdated}
             onError={(msg) => push({ type: 'error', title: msg })}
           />

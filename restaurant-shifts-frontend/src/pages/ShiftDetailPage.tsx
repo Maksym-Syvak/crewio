@@ -154,6 +154,7 @@ export default function ShiftDetailPage() {
         <ShiftSlotsInfo
           shift={shift}
           editable={isAdmin}
+          showBookingBreakdown={isAdmin}
           onUpdated={handleShiftUpdated}
           onError={(msg) => push({ type: 'error', title: msg })}
         />

@@ -5,13 +5,15 @@ import { shiftsApi, type BookShiftPayload } from '@/api/shifts.api';
 import { getErrorMessage } from '@/api/client';
 import {
   canBookShift,
+  countBookingTypes,
+  getAdminStaffingBadgeClasses,
+  getAdminStaffingStatus,
   getAvailableSlots,
   getBookedCount,
   getEmployeeBooking,
   getShiftBookingBadgeLabel,
   isPartialBooking,
   isShiftFull,
-  shiftHasPartialBookings,
 } from '@/utils/shifts';
 import { RequiredEmployeesEditor } from '@/components/RequiredEmployeesEditor';
 
@@ -116,13 +118,20 @@ export function ShiftBookingStatus({
   const bookable = canBookShift(shift);
   const badgeLabel = getShiftBookingBadgeLabel(shift, { isAdmin, employeeId });
 
+  if (isAdmin && badgeLabel) {
+    const status = getAdminStaffingStatus(shift);
+    return (
+      <div
+        className={`rounded-lg border px-4 py-3 text-center text-sm font-semibold ${getAdminStaffingBadgeClasses(status)}`}
+      >
+        {badgeLabel}
+      </div>
+    );
+  }
+
   if (badgeLabel) {
     const booking = getEmployeeBooking(shift, employeeId);
-    const partial = isAdmin
-      ? shiftHasPartialBookings(shift)
-      : booking
-        ? isPartialBooking(booking)
-        : false;
+    const partial = booking ? isPartialBooking(booking) : false;
 
     return (
       <div
@@ -151,16 +160,19 @@ export function ShiftBookingStatus({
 export function ShiftSlotsInfo({
   shift,
   editable,
+  showBookingBreakdown,
   onUpdated,
   onError,
 }: {
   shift: Shift;
   editable?: boolean;
+  showBookingBreakdown?: boolean;
   onUpdated?: (shift: Shift) => void;
   onError?: (message: string) => void;
 }) {
   const booked = getBookedCount(shift);
   const available = getAvailableSlots(shift);
+  const { full, partial } = countBookingTypes(shift);
 
   return (
     <>
@@ -171,6 +183,12 @@ export function ShiftSlotsInfo({
       )}
       <InfoRow label="Заброньовано" value={String(booked)} />
       <InfoRow label="Вільних місць" value={String(available)} highlight />
+      {showBookingBreakdown && booked > 0 && (
+        <>
+          <InfoRow label="Повні зміни" value={String(full)} />
+          <InfoRow label="Часткові зміни" value={String(partial)} />
+        </>
+      )}
     </>
   );
 }
