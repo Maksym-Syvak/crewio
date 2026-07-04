@@ -4,7 +4,7 @@ import { useAuthStore, useNotificationsStore, useShiftsStore } from '@/store';
 import { ShiftCard } from '@/components/ShiftCard';
 import { PageSkeleton } from '@/components/Skeleton';
 import { dayjs } from '@/utils/dates';
-import { ONBOARDING_PATHS } from '@/store/onboarding';
+import { ROLE_LABELS } from '@/utils/roles';
 import { isEmployeeBooked, isShiftFull } from '@/utils/shifts';
 
 export default function HomePage() {
@@ -12,6 +12,9 @@ export default function HomePage() {
   const user = useAuthStore((s) => s.user);
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
+  const workspaces = useAuthStore((s) => s.workspaces);
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
+  const switchWorkspace = useAuthStore((s) => s.switchWorkspace);
   const shifts = useShiftsStore((s) => s.shifts);
   const isLoading = useShiftsStore((s) => s.isLoading);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
@@ -59,25 +62,35 @@ export default function HomePage() {
     dayjs(s.start_time).isSame(now, 'month'),
   ).length;
 
-  if (isLoading && !shifts.length) return <PageSkeleton />;
+  if (isLoading && !shifts.length && restaurant) return <PageSkeleton />;
 
-  if (user?.role === 'employee' && !employee) {
+  if (workspaces.length === 0) {
     return (
       <div className="page">
-        <h1 className="page-title">Привіт, {user.first_name} 👋</h1>
+        <h1 className="page-title">Привіт, {user?.first_name ?? 'користувач'} 👋</h1>
         <div className="card mt-6 text-center">
-          <p className="text-lg font-medium">Ви ще не підключені до закладу</p>
+          <p className="text-lg font-medium">У вас ще немає закладів</p>
           <p className="mt-2 text-sm text-[var(--tg-hint)]">
-            Отримайте код запрошення від адміністратора та приєднайтесь до
-            команди
+            Створіть заклад або приєднайтесь за кодом запрошення
           </p>
-          <button
-            type="button"
-            className="btn-primary mt-4"
-            onClick={() => navigate(ONBOARDING_PATHS.join)}
-          >
-            Ввести код
-          </button>
+          <div className="mt-4 space-y-2">
+            {user?.role === 'owner' && (
+              <button
+                type="button"
+                className="btn-primary w-full"
+                onClick={() => navigate('/restaurants/create')}
+              >
+                Додати заклад
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-secondary w-full"
+              onClick={() => navigate('/join')}
+            >
+              Приєднатися до закладу
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -89,10 +102,47 @@ export default function HomePage() {
         Привіт, {user?.first_name ?? 'користувач'} 👋
       </h1>
 
+      {workspaces.length > 1 && (
+        <section className="mb-5">
+          <h2 className="mb-2 text-base font-semibold">Ваші заклади</h2>
+          <ul className="space-y-2">
+            {workspaces.map((ws) => (
+              <li key={ws.restaurant.id}>
+                <button
+                  type="button"
+                  className={`card flex w-full items-center justify-between text-left ${
+                    ws.restaurant.id === restaurant?.id
+                      ? 'ring-2 ring-[var(--tg-button)]/30'
+                      : ''
+                  }`}
+                  onClick={() => void switchWorkspace(ws.restaurant.id)}
+                >
+                  <span>
+                    <span className="block font-medium">🏪 {ws.restaurant.name}</span>
+                    <span className="text-xs text-[var(--tg-hint)]">
+                      {ROLE_LABELS[ws.role]}
+                    </span>
+                  </span>
+                  {ws.restaurant.id === restaurant?.id && (
+                    <span className="text-xs text-[var(--tg-link)]">активний</span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="mb-4 grid grid-cols-2 gap-3">
         <StatCard label="Змін за місяць" value={String(monthShifts)} />
         <StatCard label="Доступно" value={String(available.length)} />
       </div>
+
+      {workspaceRole === 'employee' && !employee && restaurant && (
+        <div className="card mb-5 text-sm text-[var(--tg-hint)]">
+          Ви переглядаєте заклад без активного профілю працівника.
+        </div>
+      )}
 
       <Section title="Наступна зміна">
         {nextShift ? (

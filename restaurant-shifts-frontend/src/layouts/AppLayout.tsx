@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { BottomNav } from '@/components/BottomNav';
 import { ToastContainer } from '@/components/ToastContainer';
+import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { useAppStore } from '@/store';
 
 export function AppLayout() {
@@ -15,6 +16,7 @@ export function AppLayout() {
           Немає з&apos;єднання з сервером
         </div>
       )}
+      <WorkspaceSwitcher />
       <Outlet />
       <BottomNav />
       <ToastContainer />

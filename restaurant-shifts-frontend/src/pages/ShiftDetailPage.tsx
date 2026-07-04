@@ -31,7 +31,6 @@ export default function ShiftDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const employee = useAuthStore((s) => s.employee);
-  const user = useAuthStore((s) => s.user);
   const push = useToastStore((s) => s.push);
   const upsertShift = useShiftsStore((s) => s.upsertShift);
   const [shift, setShift] = useState<Shift | null>(null);
@@ -46,7 +45,8 @@ export default function ShiftDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const isAdmin = Boolean(user && isAdminRole(user.role));
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
+  const isAdmin = isAdminRole(workspaceRole);
   const full = shift ? isShiftFull(shift) : false;
   const isBooked = shift ? isEmployeeBooked(shift, employee?.id) : false;
   const bookings = shift ? getShiftBookings(shift).filter((b) => b.status !== 'cancelled') : [];

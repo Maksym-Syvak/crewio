@@ -124,29 +124,16 @@ export function needsProfileSetup(
 
 export function needsVenueSetup(
   user: { role: UserRole; is_profile_completed?: boolean } | null,
-  restaurant: unknown,
-  employee: unknown,
+  workspaces: unknown[],
   contextLoaded: boolean,
   profileSubmitted = false,
 ) {
   const profileDone = Boolean(user?.is_profile_completed || profileSubmitted);
   if (!profileDone) return false;
 
-  const role = effectiveOnboardingRole(
-    user,
-    useOnboardingStore.getState().selectedRole,
-    profileSubmitted,
-  );
-
-  if (role === 'employee') {
-    if (profileSubmitted && !employee) return true;
-    if (!contextLoaded) return false;
-    return !employee;
-  }
-
-  if (profileSubmitted && !restaurant) return true;
+  if (profileSubmitted && workspaces.length === 0) return true;
   if (!contextLoaded) return false;
-  return !restaurant;
+  return workspaces.length === 0;
 }
 
 export function effectiveOnboardingRole(
@@ -159,23 +146,14 @@ export function effectiveOnboardingRole(
 }
 
 export function getPostLoginPath(): string {
-  const { user, restaurant, employee, contextLoaded } =
-    useAuthStore.getState();
+  const { user, workspaces, contextLoaded } = useAuthStore.getState();
   const { profileSubmitted, selectedRole } = useOnboardingStore.getState();
 
   if (needsProfileSetup(user, profileSubmitted)) {
     return ONBOARDING_PATHS.welcome;
   }
 
-  if (
-    needsVenueSetup(
-      user,
-      restaurant,
-      employee,
-      contextLoaded,
-      profileSubmitted,
-    )
-  ) {
+  if (needsVenueSetup(user, workspaces, contextLoaded, profileSubmitted)) {
     const role = effectiveOnboardingRole(user, selectedRole, profileSubmitted);
     return role === 'employee'
       ? ONBOARDING_PATHS.join

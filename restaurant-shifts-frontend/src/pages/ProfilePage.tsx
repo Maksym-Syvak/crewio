@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
   const push = useToastStore((s) => s.push);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
@@ -82,7 +83,7 @@ export default function ProfilePage() {
           {user?.first_name} {user?.last_name}
         </h1>
         <p className="text-sm text-[var(--tg-hint)]">
-          {user ? ROLE_LABELS[user.role] : ''}
+          {workspaceRole ? ROLE_LABELS[workspaceRole] : user ? ROLE_LABELS[user.role] : ''}
         </p>
         {restaurant && <p className="mt-1 text-sm">{restaurant.name}</p>}
       </div>
@@ -115,7 +116,7 @@ export default function ProfilePage() {
             Статистика
           </button>
         )}
-        {user && canManageStaff(user.role) && (
+        {canManageStaff(workspaceRole) && (
           <button type="button" className="btn-secondary" onClick={() => navigate('/staff')}>
             Персонал
           </button>

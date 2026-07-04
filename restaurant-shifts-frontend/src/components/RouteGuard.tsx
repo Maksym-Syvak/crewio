@@ -12,17 +12,19 @@ interface Props {
 
 export function RouteGuard({ children, roles, adminOnly }: Props) {
   const user = useAuthStore((s) => s.user);
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const effectiveRole = workspaceRole ?? user?.role ?? null;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && !isAdminRole(user.role)) {
+  if (adminOnly && !isAdminRole(effectiveRole)) {
     return <Navigate to="/403" replace />;
   }
 
-  if (roles && !roles.includes(user.role)) {
+  if (roles && effectiveRole && !roles.includes(effectiveRole)) {
     return <Navigate to="/403" replace />;
   }
 

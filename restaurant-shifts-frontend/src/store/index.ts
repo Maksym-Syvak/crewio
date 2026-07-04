@@ -9,6 +9,8 @@ import type {
   Shift,
   ToastMessage,
   User,
+  UserRole,
+  Workspace,
 } from '@/types';
 import { authApi, type CompleteProfilePayload, type CheckUserResponse } from '@/api/auth.api';
 import { restaurantsApi, inviteApi, type CreateRestaurantPayload } from '@/api/restaurants.api';
@@ -40,6 +42,9 @@ interface AuthState {
   tokenExpiresAt: number | null;
   employee: Employee | null;
   restaurant: Restaurant | null;
+  workspaces: Workspace[];
+  activeRestaurantId: string | null;
+  workspaceRole: UserRole | null;
   activeInvitation: InvitationToken | null;
   contextLoaded: boolean;
   isAuthenticated: boolean;
@@ -55,8 +60,10 @@ interface AuthState {
   telegramAutoAuth: () => Promise<'restore' | 'ok'>;
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
+  applyWorkspace: (workspaces: Workspace[], preferredRestaurantId?: string | null) => void;
   loadContext: () => Promise<void>;
   refreshContext: () => Promise<void>;
+  switchWorkspace: (restaurantId: string) => Promise<void>;
   completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
   createRestaurant: (payload: CreateRestaurantPayload) => Promise<void>;
   joinWithInvite: (token: string) => Promise<void>;
@@ -72,6 +79,9 @@ export const useAuthStore = create<AuthState>()(
       tokenExpiresAt: null,
       employee: null,
       restaurant: null,
+      workspaces: [],
+      activeRestaurantId: null,
+      workspaceRole: null,
       activeInvitation: null,
       contextLoaded: false,
       isAuthenticated: false,
@@ -273,10 +283,32 @@ export const useAuthStore = create<AuthState>()(
           tokenExpiresAt: null,
           employee: null,
           restaurant: null,
+          workspaces: [],
+          activeRestaurantId: null,
+          workspaceRole: null,
           activeInvitation: null,
           contextLoaded: false,
           isAuthenticated: false,
           error: null,
+        });
+      },
+
+      applyWorkspace: (workspaces: Workspace[], preferredRestaurantId?: string | null) => {
+        const { activeRestaurantId } = get();
+        const targetId =
+          preferredRestaurantId ??
+          (activeRestaurantId &&
+          workspaces.some((w) => w.restaurant.id === activeRestaurantId)
+            ? activeRestaurantId
+            : workspaces[0]?.restaurant.id ?? null);
+        const active = workspaces.find((w) => w.restaurant.id === targetId) ?? null;
+        set({
+          workspaces,
+          activeRestaurantId: targetId,
+          restaurant: active?.restaurant ?? null,
+          employee: active?.employee ?? null,
+          workspaceRole: active?.role ?? null,
+          contextLoaded: true,
         });
       },
 
@@ -285,24 +317,21 @@ export const useAuthStore = create<AuthState>()(
         if (!user || contextLoaded) return;
 
         try {
-          let restaurant = null as Restaurant | null;
-          let employee: Employee | null = null;
+          const workspaces = await employeesApi.workspaces();
+          get().applyWorkspace(workspaces);
 
-          if (user.role === 'owner' || user.role === 'admin') {
-            const owned = await restaurantsApi.mine();
-            restaurant = owned[0] ?? null;
-            if (restaurant) {
-              await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
-            }
-          } else {
-            const membership = await employeesApi.me();
-            employee = membership.employee;
-            restaurant = membership.restaurant;
+          const { restaurant } = get();
+          if (restaurant && (get().workspaceRole === 'owner' || get().workspaceRole === 'admin')) {
+            await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
           }
-
-          set({ restaurant, employee, contextLoaded: true });
         } catch {
-          set({ restaurant: null, employee: null, contextLoaded: true });
+          set({
+            workspaces: [],
+            restaurant: null,
+            employee: null,
+            workspaceRole: null,
+            contextLoaded: true,
+          });
         }
       },
 
@@ -310,27 +339,45 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get();
         if (!user) return;
 
-        set({ contextLoaded: false, restaurant: null, employee: null });
+        const previousId = get().activeRestaurantId;
+        set({ contextLoaded: false });
 
         try {
-          let restaurant = null as Restaurant | null;
-          let employee: Employee | null = null;
+          const workspaces = await employeesApi.workspaces();
+          get().applyWorkspace(workspaces, previousId);
 
-          if (user.role === 'owner' || user.role === 'admin') {
-            const owned = await restaurantsApi.mine();
-            restaurant = owned[0] ?? null;
-            if (restaurant) {
-              await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
-            }
-          } else {
-            const membership = await employeesApi.me();
-            employee = membership.employee;
-            restaurant = membership.restaurant;
+          const { restaurant, workspaceRole } = get();
+          if (restaurant && (workspaceRole === 'owner' || workspaceRole === 'admin')) {
+            await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
           }
-
-          set({ restaurant, employee, contextLoaded: true });
         } catch {
-          set({ restaurant: null, employee: null, contextLoaded: true });
+          set({
+            workspaces: [],
+            restaurant: null,
+            employee: null,
+            workspaceRole: null,
+            contextLoaded: true,
+          });
+        }
+      },
+
+      switchWorkspace: async (restaurantId: string) => {
+        const ws = get().workspaces.find((w) => w.restaurant.id === restaurantId);
+        if (!ws) return;
+
+        set({
+          activeRestaurantId: restaurantId,
+          restaurant: ws.restaurant,
+          employee: ws.employee,
+          workspaceRole: ws.role,
+          activeInvitation: null,
+        });
+
+        useShiftsStore.setState({ shifts: [] });
+
+        if (ws.role === 'owner' || ws.role === 'admin') {
+          await get().refreshInvite().catch(() => undefined);
+          await restaurantsApi.integrityCheck(restaurantId).catch(() => undefined);
         }
       },
 
@@ -342,21 +389,15 @@ export const useAuthStore = create<AuthState>()(
 
       createRestaurant: async (payload) => {
         const { restaurant, invitation } = await restaurantsApi.create(payload);
-        set({
-          restaurant,
-          activeInvitation: invitation,
-          contextLoaded: true,
-        });
+        await get().refreshContext();
+        await get().switchWorkspace(restaurant.id);
+        set({ activeInvitation: invitation });
       },
 
       joinWithInvite: async (token) => {
-        const { employee, restaurant } = await inviteApi.join(token);
-        const membership = await employeesApi.me().catch(() => null);
-        set({
-          employee: (membership?.employee ?? employee) as Employee,
-          restaurant: membership?.restaurant ?? restaurant,
-          contextLoaded: true,
-        });
+        const { restaurant } = await inviteApi.join(token);
+        await get().refreshContext();
+        await get().switchWorkspace(restaurant.id);
       },
 
       refreshInvite: async () => {
@@ -374,6 +415,7 @@ export const useAuthStore = create<AuthState>()(
         tokenExpiresAt: s.tokenExpiresAt,
         user: s.user,
         isAuthenticated: s.isAuthenticated,
+        activeRestaurantId: s.activeRestaurantId,
       }),
     },
   ),

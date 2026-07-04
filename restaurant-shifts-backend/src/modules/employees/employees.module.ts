@@ -7,10 +7,11 @@ import { RestaurantsModule } from '../restaurants/restaurants.module';
 import { StatisticsModule } from '../statistics/statistics.module';
 import { ShiftBooking } from '../shifts/entities/shift-booking.entity';
 import { Statistics } from '../statistics/entities/statistics.entity';
+import { Position } from '../positions/entities/position.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Employee, ShiftBooking, Statistics]),
+    TypeOrmModule.forFeature([Employee, ShiftBooking, Statistics, Position]),
     forwardRef(() => RestaurantsModule),
     StatisticsModule,
   ],

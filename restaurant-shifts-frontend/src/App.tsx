@@ -126,6 +126,15 @@ function AppBootstrap() {
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="statistics" element={<StatisticsPage />} />
+            <Route path="join" element={<JoinRestaurantPage />} />
+            <Route
+              path="restaurants/create"
+              element={
+                <RouteGuard roles={['owner']}>
+                  <CreateRestaurantPage />
+                </RouteGuard>
+              }
+            />
             <Route
               path="staff"
               element={

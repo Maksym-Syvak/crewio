@@ -19,6 +19,12 @@ export enum EmployeeStatus {
   TEMPORARILY_UNAVAILABLE = 'temporarily_unavailable',
 }
 
+/** Role within a specific restaurant workspace (not global). */
+export enum MemberRole {
+  EMPLOYEE = 'employee',
+  ADMIN = 'admin',
+}
+
 // "employees" is the join entity between a restaurant, a user (their
 // Telegram account) and a position — a single Telegram user can be an
 // employee at several restaurants, each as a separate Employee row.
@@ -69,6 +75,9 @@ export class Employee {
 
   @Column({ type: 'enum', enum: EmployeeStatus, default: EmployeeStatus.ACTIVE })
   status: EmployeeStatus;
+
+  @Column({ type: 'enum', enum: MemberRole, default: MemberRole.EMPLOYEE })
+  member_role: MemberRole;
 
   @CreateDateColumn()
   created_at: Date;

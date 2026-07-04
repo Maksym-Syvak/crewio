@@ -17,6 +17,8 @@ export type EmployeeStatus =
   | 'terminated'
   | 'temporarily_unavailable';
 
+export type MemberRole = 'employee' | 'admin';
+
 export type ShiftStatus =
   | 'open'
   | 'partially_filled'
@@ -126,11 +128,19 @@ export interface Employee {
   hourly_rate?: number;
   desired_shifts_per_month: number;
   status: EmployeeStatus;
+  member_role?: MemberRole;
   created_at: string;
   user?: User;
   position?: Position;
   restaurant?: Restaurant;
   summary?: EmployeeSummary;
+}
+
+export interface Workspace {
+  restaurant: Restaurant;
+  role: UserRole;
+  employee_id: string | null;
+  employee: Employee | null;
 }
 
 export interface EmployeeSummary {

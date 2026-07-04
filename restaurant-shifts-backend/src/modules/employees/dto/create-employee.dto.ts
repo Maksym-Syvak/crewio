@@ -1,5 +1,5 @@
 import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
-import { EmployeeStatus } from '../entities/employee.entity';
+import { EmployeeStatus, MemberRole } from '../entities/employee.entity';
 
 export class CreateEmployeeDto {
   @IsString()
@@ -31,4 +31,8 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsEnum(EmployeeStatus)
   status?: EmployeeStatus;
+
+  @IsOptional()
+  @IsEnum(MemberRole)
+  member_role?: MemberRole;
 }

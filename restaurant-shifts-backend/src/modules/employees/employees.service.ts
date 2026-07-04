@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Employee, EmployeeStatus } from './entities/employee.entity';
+import { Employee, EmployeeStatus, MemberRole } from './entities/employee.entity';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { toPaginatedResult } from '../../common/dto/pagination-query.dto';
@@ -14,6 +14,16 @@ import { RestaurantsService } from '../restaurants/restaurants.service';
 import { StatisticsService } from '../statistics/statistics.service';
 import { ShiftBooking, ShiftBookingStatus } from '../shifts/entities/shift-booking.entity';
 import { Statistics } from '../statistics/entities/statistics.entity';
+import { Position } from '../positions/entities/position.entity';
+
+export type WorkspaceRole = 'owner' | 'admin' | 'employee';
+
+export interface WorkspaceItem {
+  restaurant: Awaited<ReturnType<RestaurantsService['findOne']>>;
+  role: WorkspaceRole;
+  employee_id: string | null;
+  employee: Employee | null;
+}
 
 export interface EmployeeSummary {
   next_shift_start: string | null;
@@ -31,6 +41,8 @@ export class EmployeesService {
     private readonly bookingsRepo: Repository<ShiftBooking>,
     @InjectRepository(Statistics)
     private readonly statsRepo: Repository<Statistics>,
+    @InjectRepository(Position)
+    private readonly positionsRepo: Repository<Position>,
     private readonly restaurantsService: RestaurantsService,
     private readonly statisticsService: StatisticsService,
   ) {}
@@ -79,23 +91,68 @@ export class EmployeesService {
     return employee;
   }
 
-  async assertCanViewRestaurantStaff(
+  async resolveWorkspaceRole(
     userId: string,
-    userRole: string,
     restaurantId: string,
-  ) {
-    if (userRole === 'admin') return;
-
-    if (userRole === 'owner') {
-      const owned = await this.restaurantsService.findAll(userId);
-      if (owned.some((r) => r.id === restaurantId)) return;
-      throw new ForbiddenException('Немає доступу до персоналу цього закладу');
-    }
+  ): Promise<WorkspaceRole | null> {
+    const restaurant = await this.restaurantsService.findOne(restaurantId);
+    if (restaurant.owner_id === userId) return 'owner';
 
     const membership = await this.findByUserAndRestaurant(userId, restaurantId);
-    if (!membership) {
-      throw new ForbiddenException('Немає доступу до персоналу цього закладу');
+    if (!membership) return null;
+    return membership.member_role === MemberRole.ADMIN ? 'admin' : 'employee';
+  }
+
+  async assertCanManageRestaurant(userId: string, restaurantId: string) {
+    const role = await this.resolveWorkspaceRole(userId, restaurantId);
+    if (role === 'owner' || role === 'admin') return role;
+    throw new ForbiddenException('Немає прав для керування цим закладом');
+  }
+
+  async listWorkspaces(userId: string): Promise<WorkspaceItem[]> {
+    const owned = await this.restaurantsService.findAll(userId);
+    const employments = await this.employeesRepo.find({
+      where: { user_id: userId },
+      relations: ['user', 'position', 'restaurant'],
+      order: { created_at: 'ASC' },
+    });
+
+    const ownedIds = new Set(owned.map((r) => r.id));
+    const workspaces: WorkspaceItem[] = [];
+
+    for (const restaurant of owned) {
+      const employee =
+        employments.find((e) => e.restaurant_id === restaurant.id) ?? null;
+      workspaces.push({
+        restaurant,
+        role: 'owner',
+        employee_id: employee?.id ?? null,
+        employee,
+      });
     }
+
+    for (const employment of employments) {
+      if (ownedIds.has(employment.restaurant_id)) continue;
+      workspaces.push({
+        restaurant: employment.restaurant,
+        role:
+          employment.member_role === MemberRole.ADMIN ? 'admin' : 'employee',
+        employee_id: employment.id,
+        employee: employment,
+      });
+    }
+
+    return workspaces;
+  }
+
+  async assertCanViewRestaurantStaff(
+    userId: string,
+    _userRole: string,
+    restaurantId: string,
+  ) {
+    const role = await this.resolveWorkspaceRole(userId, restaurantId);
+    if (role === 'owner' || role === 'admin') return;
+    throw new ForbiddenException('Немає доступу до персоналу цього закладу');
   }
 
   private currentMonthKey() {
@@ -241,18 +298,24 @@ export class EmployeesService {
     };
   }
 
-  async findMembership(userId: string) {
-    const employees = await this.employeesRepo.find({
-      where: { user_id: userId },
-      relations: ['user', 'position', 'restaurant'],
-      order: { created_at: 'DESC' },
-      take: 1,
-    });
-    const employee = employees[0] ?? null;
-    if (!employee) {
+  async findMembership(userId: string, restaurantId?: string) {
+    if (restaurantId) {
+      const employee = await this.findByUserAndRestaurant(userId, restaurantId);
+      return {
+        employee,
+        restaurant: employee?.restaurant ?? null,
+      };
+    }
+
+    const workspaces = await this.listWorkspaces(userId);
+    const first = workspaces[0];
+    if (!first) {
       return { employee: null, restaurant: null };
     }
-    return { employee, restaurant: employee.restaurant ?? null };
+    return {
+      employee: first.employee,
+      restaurant: first.restaurant,
+    };
   }
 
   async findActiveByRestaurant(restaurantId: string) {
@@ -264,6 +327,54 @@ export class EmployeesService {
 
   create(dto: CreateEmployeeDto) {
     return this.employeesRepo.save(this.employeesRepo.create(dto));
+  }
+
+  private async validatePositionForRestaurant(
+    positionId: string | undefined | null,
+    restaurantId: string,
+  ) {
+    if (!positionId) return;
+    const position = await this.positionsRepo.findOne({
+      where: { id: positionId },
+    });
+    if (!position || position.restaurant_id !== restaurantId) {
+      throw new BadRequestException(
+        'Посада не належить до цього закладу',
+      );
+    }
+  }
+
+  async updateManaged(
+    id: string,
+    requestUserId: string,
+    dto: UpdateEmployeeDto,
+  ) {
+    const employee = await this.findOne(id);
+    await this.assertCanManageRestaurant(requestUserId, employee.restaurant_id);
+
+    if (dto.member_role != null && dto.member_role !== MemberRole.EMPLOYEE) {
+      const requesterRole = await this.resolveWorkspaceRole(
+        requestUserId,
+        employee.restaurant_id,
+      );
+      if (requesterRole !== 'owner') {
+        throw new ForbiddenException(
+          'Лише власник може призначати адміністраторів',
+        );
+      }
+    }
+
+    const positionId =
+      dto.position_id !== undefined ? dto.position_id : employee.position_id;
+    await this.validatePositionForRestaurant(positionId, employee.restaurant_id);
+
+    const {
+      restaurant_id: _restaurantId,
+      user_id: _userId,
+      ...safeDto
+    } = dto;
+    await this.employeesRepo.update(id, safeDto);
+    return this.findOne(id);
   }
 
   async update(id: string, dto: UpdateEmployeeDto) {

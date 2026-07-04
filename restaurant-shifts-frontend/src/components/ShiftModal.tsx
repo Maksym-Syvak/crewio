@@ -25,11 +25,11 @@ interface Props {
 export function ShiftModal({ shift: initialShift, onClose, onUpdated }: Props) {
   const [shift, setShift] = useState(initialShift);
   const employee = useAuthStore((s) => s.employee);
-  const user = useAuthStore((s) => s.user);
   const upsertShift = useShiftsStore((s) => s.upsertShift);
   const push = useToastStore((s) => s.push);
 
-  const isAdmin = Boolean(user && isAdminRole(user.role));
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
+  const isAdmin = isAdminRole(workspaceRole);
 
   const pay = getShiftPayLabel(shift);
   const isBooked = isEmployeeBooked(shift, employee?.id);

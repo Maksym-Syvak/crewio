@@ -18,13 +18,13 @@ type SortKey = 'date_asc' | 'date_desc';
 export default function ShiftsPage() {
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
-  const user = useAuthStore((s) => s.user);
   const shifts = useShiftsStore((s) => s.shifts);
   const isLoading = useShiftsStore((s) => s.isLoading);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
   const upsertShift = useShiftsStore((s) => s.upsertShift);
 
-  const isAdmin = Boolean(user && isAdminRole(user.role));
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
+  const isAdmin = isAdminRole(workspaceRole);
   const [tab, setTab] = useState<Tab>(isAdmin ? 'all' : 'available');
   const [sort, setSort] = useState<SortKey>('date_asc');
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);

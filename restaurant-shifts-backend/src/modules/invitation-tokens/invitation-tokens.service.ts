@@ -109,10 +109,9 @@ export class InvitationTokensService {
     const user = await this.usersService.findById(userId);
     if (!user) throw new NotFoundException('User not found');
 
-    if (user.role !== 'employee') {
-      throw new BadRequestException(
-        'Приєднання за кодом доступне лише для ролі «Працівник»',
-      );
+    const restaurant = await this.restaurantsService.findOne(invite.restaurant_id);
+    if (restaurant.owner_id === userId) {
+      throw new BadRequestException('Ви вже є власником цього закладу');
     }
 
     const existing = await this.employeesService.findByUserAndRestaurant(

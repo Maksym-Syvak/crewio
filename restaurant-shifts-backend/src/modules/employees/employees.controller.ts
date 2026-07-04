@@ -32,9 +32,17 @@ export class EmployeesController {
     );
   }
 
+  @Get('workspaces')
+  listWorkspaces(@Req() req: { user: { sub: string } }) {
+    return this.employeesService.listWorkspaces(req.user.sub);
+  }
+
   @Get('me')
-  findMine(@Req() req: { user: { sub: string } }) {
-    return this.employeesService.findMembership(req.user.sub);
+  findMine(
+    @Req() req: { user: { sub: string } },
+    @Query('restaurantId') restaurantId?: string,
+  ) {
+    return this.employeesService.findMembership(req.user.sub, restaurantId);
   }
 
   @Get(':id/profile')
@@ -65,10 +73,13 @@ export class EmployeesController {
     return this.employeesService.create(dto);
   }
 
-  @Roles('owner', 'admin')
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
-    return this.employeesService.update(id, dto);
+  update(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Body() dto: UpdateEmployeeDto,
+  ) {
+    return this.employeesService.updateManaged(id, req.user.sub, dto);
   }
 
   @Roles('owner', 'admin')

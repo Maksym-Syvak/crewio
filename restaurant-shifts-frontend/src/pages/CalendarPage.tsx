@@ -21,7 +21,6 @@ import {
 
 export default function CalendarPage() {
   const employee = useAuthStore((s) => s.employee);
-  const user = useAuthStore((s) => s.user);
   const restaurant = useAuthStore((s) => s.restaurant);
   const shifts = useShiftsStore((s) => s.shifts);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
@@ -30,7 +29,8 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
 
-  const isAdmin = Boolean(user && isAdminRole(user.role));
+  const workspaceRole = useAuthStore((s) => s.workspaceRole);
+  const isAdmin = isAdminRole(workspaceRole);
 
   useEffect(() => {
     if (restaurant) fetchShifts(restaurant.id);

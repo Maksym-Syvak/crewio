@@ -10,8 +10,7 @@ import {
 /** Blocks main app until profile + venue setup is done. */
 export function OnboardingGuard() {
   const user = useAuthStore((s) => s.user);
-  const restaurant = useAuthStore((s) => s.restaurant);
-  const employee = useAuthStore((s) => s.employee);
+  const workspaces = useAuthStore((s) => s.workspaces);
   const contextLoaded = useAuthStore((s) => s.contextLoaded);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const profileSubmitted = useOnboardingStore((s) => s.profileSubmitted);
@@ -25,7 +24,7 @@ export function OnboardingGuard() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (needsVenueSetup(user, restaurant, employee, contextLoaded, profileSubmitted)) {
+  if (needsVenueSetup(user, workspaces, contextLoaded, profileSubmitted)) {
     const role = effectiveOnboardingRole(user, selectedRole, profileSubmitted);
     if (role === 'employee') {
       return <Navigate to="/onboarding/join" replace />;
@@ -39,8 +38,7 @@ export function OnboardingGuard() {
 /** Keeps user inside onboarding until profile/venue steps are finished. */
 export function OnboardingOnlyGuard() {
   const user = useAuthStore((s) => s.user);
-  const restaurant = useAuthStore((s) => s.restaurant);
-  const employee = useAuthStore((s) => s.employee);
+  const workspaces = useAuthStore((s) => s.workspaces);
   const contextLoaded = useAuthStore((s) => s.contextLoaded);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const profileSubmitted = useOnboardingStore((s) => s.profileSubmitted);
@@ -51,7 +49,7 @@ export function OnboardingOnlyGuard() {
 
   if (
     !needsProfileSetup(user, profileSubmitted) &&
-    !needsVenueSetup(user, restaurant, employee, contextLoaded, profileSubmitted)
+    !needsVenueSetup(user, workspaces, contextLoaded, profileSubmitted)
   ) {
     return <Navigate to="/" replace />;
   }
