@@ -147,9 +147,6 @@ export interface ShiftBooking {
   employee?: Employee;
 }
 
-/** @deprecated use ShiftBooking */
-export type ShiftEmployee = ShiftBooking;
-
 export interface Shift {
   id: string;
   restaurant_id: string;
@@ -172,8 +169,6 @@ export interface Shift {
   position?: Position;
   restaurant?: Restaurant;
   bookings?: ShiftBooking[];
-  /** @deprecated use bookings */
-  assignments?: ShiftBooking[];
   replacementRequests?: ReplacementRequest[];
 }
 

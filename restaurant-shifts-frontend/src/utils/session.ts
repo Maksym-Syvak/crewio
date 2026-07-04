@@ -22,7 +22,3 @@ export async function clearAppSession() {
 
   sessionStorage.clear();
 }
-
-export function getTelegramInitData(): string | null {
-  return window.Telegram?.WebApp?.initData || null;
-}

@@ -17,11 +17,6 @@ export interface CreateRestaurantPayload {
 }
 
 export const restaurantsApi = {
-  list: (ownerId?: string) =>
-    api
-      .get<Restaurant[]>('/restaurants', { params: { ownerId } })
-      .then((r) => r.data),
-
   mine: () => api.get<Restaurant[]>('/restaurants/mine').then((r) => r.data),
 
   integrityCheck: (restaurantId: string) =>
@@ -30,9 +25,6 @@ export const restaurantsApi = {
         params: { restaurantId },
       })
       .then((r) => r.data),
-
-  get: (id: string) =>
-    api.get<Restaurant>(`/restaurants/${id}`).then((r) => r.data),
 
   create: (data: CreateRestaurantPayload) =>
     api

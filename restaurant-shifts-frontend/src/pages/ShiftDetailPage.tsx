@@ -65,6 +65,8 @@ export default function ShiftDetailPage() {
     setActing(true);
     try {
       await shiftsApi.cannotMakeIt(shift.id, employee.id);
+      const updated = await shiftsApi.get(shift.id);
+      upsertShift(updated);
       push({ type: 'info', title: 'Бронювання скасовано' });
       navigate('/shifts');
     } catch (e) {

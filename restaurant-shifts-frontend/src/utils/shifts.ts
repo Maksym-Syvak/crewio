@@ -2,7 +2,7 @@ import type { PaymentType, Shift, ShiftBooking, ShiftStatus } from '@/types';
 import { shiftDurationHours } from '@/utils/dates';
 
 export function getShiftBookings(shift: Shift): ShiftBooking[] {
-  return shift.bookings ?? shift.assignments ?? [];
+  return shift.bookings ?? [];
 }
 
 export function getBookedCount(shift: Shift): number {
@@ -18,6 +18,10 @@ export function getAvailableSlots(shift: Shift): number {
 
 export function isShiftFull(shift: Shift): boolean {
   return getAvailableSlots(shift) === 0;
+}
+
+export function isShiftUrgent(shift: Shift): boolean {
+  return shift.status === 'urgent' || shift.is_urgent;
 }
 
 export function isEmployeeBooked(shift: Shift, employeeId?: string): boolean {
@@ -57,16 +61,6 @@ export function getEmployeeBooking(
   );
 }
 
-export function hasStaffBookings(shift: Shift): boolean {
-  return getBookedCount(shift) > 0;
-}
-
-export function shiftHasPartialBookings(shift: Shift): boolean {
-  return getShiftBookings(shift).some(
-    (b) => b.status !== 'cancelled' && isPartialBooking(b),
-  );
-}
-
 export function countBookingTypes(shift: Shift) {
   const active = getShiftBookings(shift).filter((b) => b.status !== 'cancelled');
   return {
@@ -75,7 +69,14 @@ export function countBookingTypes(shift: Shift) {
   };
 }
 
-export type AdminStaffingStatus = 'unbooked' | 'partial' | 'full' | 'urgent';
+type AdminStaffingStatus = 'unbooked' | 'partial' | 'full' | 'urgent';
+
+const ADMIN_STAFFING_LABELS: Record<AdminStaffingStatus, string> = {
+  unbooked: 'Не заброньована',
+  partial: 'Частково заброньована',
+  full: 'Заброньована',
+  urgent: 'Термінова',
+};
 
 export function getAdminStaffingStatus(shift: Shift): AdminStaffingStatus {
   const booked = getBookedCount(shift);
@@ -87,14 +88,7 @@ export function getAdminStaffingStatus(shift: Shift): AdminStaffingStatus {
   return 'partial';
 }
 
-export const ADMIN_STAFFING_LABELS: Record<AdminStaffingStatus, string> = {
-  unbooked: 'Не заброньована',
-  partial: 'Частково заброньована',
-  full: 'Заброньована',
-  urgent: 'Термінова',
-};
-
-export function getAdminStaffingLabel(status: AdminStaffingStatus): string {
+function getAdminStaffingLabel(status: AdminStaffingStatus): string {
   return ADMIN_STAFFING_LABELS[status];
 }
 
@@ -124,7 +118,7 @@ export function getAdminStaffingTextClass(status: AdminStaffingStatus): string {
   }
 }
 
-export type ShiftDisplayVariant = 'mine' | 'minePartial' | 'available' | 'urgent' | 'dayoff';
+type ShiftDisplayVariant = 'mine' | 'minePartial' | 'available' | 'urgent' | 'dayoff';
 
 export function getShiftDisplayVariant(
   shift: Shift,
@@ -186,23 +180,13 @@ export function getBookingLegendLabels(isAdmin: boolean) {
   } as const;
 }
 
-/** Left accent border — full matches "Моя зміна", partial uses amber */
-export const BOOKING_ACCENT = {
+const BOOKING_ACCENT = {
   full: 'border-l-4 border-l-[var(--crew-green)]',
   partial: 'border-l-4 border-l-[var(--crew-amber)]',
 } as const;
 
-export const BOOKING_DOT = {
-  full: 'bg-[var(--crew-green)]',
-  partial: 'bg-[var(--crew-amber)]',
-} as const;
-
 export function getBookingAccent(partial: boolean): string {
   return partial ? BOOKING_ACCENT.partial : BOOKING_ACCENT.full;
-}
-
-export function getBookingDot(partial: boolean): string {
-  return partial ? BOOKING_DOT.partial : BOOKING_DOT.full;
 }
 
 export function getShiftPayLabel(shift: Shift): string | null {
@@ -245,7 +229,7 @@ export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
   fixed: 'Фіксована ставка',
 };
 
-export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
+const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
   open: 'Відкрита',
   partially_filled: 'Частково заповнена',
   fully_filled: 'Заповнена',
@@ -257,10 +241,6 @@ export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
 
 export function getShiftStatusLabel(status: ShiftStatus): string {
   return SHIFT_STATUS_LABELS[status] ?? status;
-}
-
-export function isShiftUrgent(shift: Shift): boolean {
-  return shift.status === 'urgent' || shift.is_urgent;
 }
 
 export function canBookShift(shift: Shift): boolean {

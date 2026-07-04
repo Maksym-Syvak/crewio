@@ -61,6 +61,4 @@ export const authApi = {
 
   logout: (refreshToken?: string) =>
     api.post<{ ok: boolean }>('/auth/logout', { refreshToken }).then((r) => r.data),
-
-  me: () => api.post('/auth/me').then((r) => r.data),
 };

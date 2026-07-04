@@ -15,7 +15,6 @@ import {
   ShiftBookingStatus,
   ShiftSlotsInfo,
 } from '@/components/ShiftBookingForm';
-import { cn } from '@/utils/cn';
 
 interface Props {
   shift: Shift;
@@ -114,7 +113,7 @@ export function ShiftModal({ shift: initialShift, onClose, onUpdated }: Props) {
           )}
 
           {!employee && !isBooked && !full && (
-            <p className={cn('text-center text-sm text-[var(--tg-hint)]')}>
+            <p className="text-center text-sm text-[var(--tg-hint)]">
               Увійдіть як працівник, щоб забронювати зміну
             </p>
           )}

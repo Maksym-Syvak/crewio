@@ -17,18 +17,10 @@ export function formatTime(iso: string) {
   return dayjs(iso).format('HH:mm');
 }
 
-export function formatDateTime(iso: string) {
-  return dayjs(iso).format('D MMM, HH:mm');
-}
-
 export function formatMonth(month?: string) {
   return dayjs(month ?? undefined).format('YYYY-MM');
 }
 
 export function shiftDurationHours(start: string, end: string) {
   return dayjs(end).diff(dayjs(start), 'hour', true);
-}
-
-export function isSameDay(a: string, b: string) {
-  return dayjs(a).isSame(dayjs(b), 'day');
 }

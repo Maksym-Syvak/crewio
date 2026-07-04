@@ -57,7 +57,10 @@ export default function CalendarPage() {
     return map;
   }, [shifts]);
 
-  const dayShifts = selectedDay ? (shiftsByDay.get(selectedDay) ?? []) : [];
+  const dayShifts = useMemo(
+    () => (selectedDay ? (shiftsByDay.get(selectedDay) ?? []) : []),
+    [selectedDay, shiftsByDay],
+  );
 
   const dayBookings = useMemo(() => {
     const items: { booking: ShiftBooking; shift: Shift }[] = [];

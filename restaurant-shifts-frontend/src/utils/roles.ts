@@ -13,7 +13,3 @@ export function isAdminRole(role: UserRole) {
 export function canManageStaff(role: UserRole) {
   return isAdminRole(role);
 }
-
-export function canManageShifts(role: UserRole) {
-  return isAdminRole(role);
-}

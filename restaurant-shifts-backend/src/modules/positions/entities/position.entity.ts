@@ -10,19 +10,6 @@ import { Restaurant } from '../../restaurants/entities/restaurant.entity';
 import { Employee } from '../../employees/entities/employee.entity';
 import { Shift } from '../../shifts/entities/shift.entity';
 
-// Common position name suggestions (section 8 of the TOR). Restaurants can
-// still add custom position names — this is not a hard enum constraint.
-export enum CommonPositionName {
-  WAITER = 'waiter',
-  BARTENDER = 'bartender',
-  COOK = 'cook',
-  ADMIN = 'admin',
-  CASHIER = 'cashier',
-  CLEANER = 'cleaner',
-  COURIER = 'courier',
-  OTHER = 'other',
-}
-
 @Entity('positions')
 export class Position {
   @PrimaryGeneratedColumn('uuid')
