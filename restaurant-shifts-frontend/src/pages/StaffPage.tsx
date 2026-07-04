@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { employeesApi } from '@/api/employees.api';
+import { getErrorMessage } from '@/api/client';
 import { useAuthStore } from '@/store';
 import type { Employee } from '@/types';
 import { PageSkeleton } from '@/components/Skeleton';
@@ -9,36 +10,60 @@ const PAGE_SIZE = 20;
 
 export default function StaffPage() {
   const restaurant = useAuthStore((s) => s.restaurant);
+  const refreshContext = useAuthStore((s) => s.refreshContext);
   const [staff, setStaff] = useState<Employee[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const restaurantId = restaurant?.id;
 
   const loadPage = useCallback(
     async (pageNum: number, append: boolean) => {
-      if (!restaurant) return;
+      if (!restaurantId) return;
       if (append) setLoadingMore(true);
       else setLoading(true);
 
       try {
-        const res = await employeesApi.list(restaurant.id, pageNum, PAGE_SIZE);
+        setError(null);
+        const res = await employeesApi.list(restaurantId, pageNum, PAGE_SIZE);
         setStaff((prev) => (append ? [...prev, ...res.data] : res.data));
         setHasMore(res.meta.hasMore);
         setPage(pageNum);
+      } catch (e) {
+        if (!append) setStaff([]);
+        setError(getErrorMessage(e));
       } finally {
         setLoading(false);
         setLoadingMore(false);
       }
     },
-    [restaurant],
+    [restaurantId],
   );
 
   useEffect(() => {
-    if (!restaurant) return;
-    loadPage(1, false);
-  }, [restaurant, loadPage]);
+    void refreshContext();
+  }, [refreshContext]);
+
+  useEffect(() => {
+    if (!restaurantId) {
+      setLoading(false);
+      return;
+    }
+    void loadPage(1, false);
+  }, [restaurantId, loadPage]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && restaurantId) {
+        void loadPage(1, false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [restaurantId, loadPage]);
 
   useEffect(() => {
     if (!hasMore || loading || loadingMore) return;
@@ -48,7 +73,7 @@ export default function StaffPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          loadPage(page + 1, true);
+          void loadPage(page + 1, true);
         }
       },
       { rootMargin: '120px' },
@@ -57,7 +82,7 @@ export default function StaffPage() {
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, loadPage, page]);
 
-  if (loading && staff.length === 0) return <PageSkeleton />;
+  if (loading && staff.length === 0 && !error) return <PageSkeleton />;
 
   return (
     <div className="page">
@@ -67,6 +92,11 @@ export default function StaffPage() {
           + Запросити
         </Link>
       </div>
+      {error && (
+        <p className="mb-3 rounded-lg bg-[var(--crew-red)]/10 px-3 py-2 text-sm text-[var(--crew-red)]">
+          {error}
+        </p>
+      )}
       <ul className="space-y-2">
         {staff.map((e) => (
           <li key={e.id} className="card flex items-center gap-3">
@@ -98,7 +128,7 @@ export default function StaffPage() {
           </li>
         ))}
       </ul>
-      {staff.length === 0 && (
+      {!loading && staff.length === 0 && !error && (
         <p className="text-center text-sm text-[var(--tg-hint)]">
           Персонал порожній
         </p>

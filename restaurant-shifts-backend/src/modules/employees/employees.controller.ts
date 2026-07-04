@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -16,10 +16,19 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get()
-  findAll(
+  async findAll(
+    @Req() req: { user: { sub: string; role: string } },
     @Query('restaurantId') restaurantId?: string,
     @Query() pagination?: PaginationQueryDto,
   ) {
+    if (!restaurantId) {
+      throw new BadRequestException('restaurantId is required');
+    }
+    await this.employeesService.assertCanViewRestaurantStaff(
+      req.user.sub,
+      req.user.role,
+      restaurantId,
+    );
     return this.employeesService.findAll(
       restaurantId,
       pagination?.page ?? 1,

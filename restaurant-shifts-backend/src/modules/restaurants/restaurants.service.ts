@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Restaurant } from './entities/restaurant.entity';
@@ -82,5 +82,18 @@ export class RestaurantsService {
     const restaurant = await this.findOne(id);
     await this.restaurantsRepo.remove(restaurant);
     return { deleted: true };
+  }
+
+  async runIntegrityCheck(
+    restaurantId: string,
+    userId: string,
+    userRole: string,
+    repairBookings: (restaurantId: string) => Promise<{ issues: number; details: string[] }>,
+  ) {
+    const restaurant = await this.findOne(restaurantId);
+    if (userRole !== 'admin' && restaurant.owner_id !== userId) {
+      throw new ForbiddenException('Немає доступу до цього закладу');
+    }
+    return repairBookings(restaurantId);
   }
 }

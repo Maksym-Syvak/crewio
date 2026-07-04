@@ -7,10 +7,12 @@ import { ReplacementRequest } from '../replacement-requests/entities/replacement
 import { ShiftsService } from './shifts.service';
 import { ShiftsController } from './shifts.controller';
 import { ShiftsScheduler } from './shifts.scheduler';
+import { EmployeesModule } from '../employees/employees.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Shift, ShiftBooking, Employee, ReplacementRequest]),
+    EmployeesModule,
   ],
   controllers: [ShiftsController],
   providers: [ShiftsService, ShiftsScheduler],

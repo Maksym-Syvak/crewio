@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { InvitationTokensService } from '../invitation-tokens/invitation-tokens.service';
+import { ShiftsService } from '../shifts/shifts.service';
 
 @ApiTags('restaurants')
 @ApiBearerAuth()
@@ -27,11 +28,31 @@ export class RestaurantsController {
   constructor(
     private readonly restaurantsService: RestaurantsService,
     private readonly invitationTokensService: InvitationTokensService,
+    private readonly shiftsService: ShiftsService,
   ) {}
 
   @Get()
   findAll(@Query('ownerId') ownerId?: string) {
     return this.restaurantsService.findAll(ownerId);
+  }
+
+  @Get('mine')
+  findMine(@Req() req: { user: { sub: string } }) {
+    return this.restaurantsService.findAll(req.user.sub);
+  }
+
+  @Roles('owner', 'admin')
+  @Post('integrity-check')
+  integrityCheck(
+    @Query('restaurantId') restaurantId: string,
+    @Req() req: { user: { sub: string; role: string } },
+  ) {
+    return this.restaurantsService.runIntegrityCheck(
+      restaurantId,
+      req.user.sub,
+      req.user.role,
+      (id) => this.shiftsService.repairBookingIntegrity(id),
+    );
   }
 
   @Get(':id')

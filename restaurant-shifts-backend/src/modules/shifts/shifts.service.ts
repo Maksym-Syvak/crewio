@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -19,6 +19,7 @@ import { GenerateScheduleDto } from './dto/generate-schedule.dto';
 import { BookShiftDto } from './dto/book-shift.dto';
 import { generateShiftSlots } from './utils/schedule-generator';
 import { calculateBookingSalary } from './utils/payment-calculator';
+import { EmployeesService } from '../employees/employees.service';
 
 const MAX_WEEKLY_HOURS = 60;
 const URGENT_HOURS_BEFORE = 24;
@@ -26,6 +27,8 @@ export const URGENT_REMINDER_THRESHOLDS = [24, 12, 6, 2] as const;
 
 @Injectable()
 export class ShiftsService {
+  private readonly logger = new Logger(ShiftsService.name);
+
   constructor(
     @InjectRepository(Shift)
     private readonly shiftsRepo: Repository<Shift>,
@@ -36,6 +39,7 @@ export class ShiftsService {
     @InjectRepository(ReplacementRequest)
     private readonly replacementRepo: Repository<ReplacementRequest>,
     private readonly events: EventEmitter2,
+    private readonly employeesService: EmployeesService,
   ) {}
 
   private toShiftDate(start: Date): string {
@@ -385,20 +389,19 @@ export class ShiftsService {
     return { deleted: true };
   }
 
-  async book(shiftId: string, dto: BookShiftDto) {
+  async book(shiftId: string, dto: BookShiftDto, userId: string) {
     const shift = await this.findOne(shiftId);
-    const employeeId = dto.employee_id;
 
     if ([ShiftStatus.ACTIVE, ShiftStatus.COMPLETED, ShiftStatus.CANCELLED].includes(shift.status)) {
       throw new BadRequestException('Зміну вже не можна забронювати');
     }
 
-    const employee = await this.employeesRepo.findOne({ where: { id: employeeId } });
-    if (!employee) throw new NotFoundException('Employee not found');
-
-    if (employee.restaurant_id !== shift.restaurant_id) {
-      throw new BadRequestException('Працівник не належить до цього закладу');
-    }
+    const employee = await this.employeesService.resolveForBooking(
+      userId,
+      shift.restaurant_id,
+      dto.employee_id,
+    );
+    const employeeId = employee.id;
 
     const booked = this.activeBookingsCount(shift);
     if (booked >= shift.required_employees) {
@@ -520,11 +523,51 @@ export class ShiftsService {
     }
   }
 
-  async cannotMakeShift(shiftId: string, employeeId: string, reason?: string) {
+  async repairBookingIntegrity(restaurantId: string) {
+    const bookings = await this.bookingsRepo
+      .createQueryBuilder('booking')
+      .innerJoinAndSelect('booking.shift', 'shift')
+      .leftJoinAndSelect('booking.employee', 'employee')
+      .where('shift.restaurant_id = :restaurantId', { restaurantId })
+      .andWhere('booking.status = :status', {
+        status: ShiftBookingStatus.CONFIRMED,
+      })
+      .getMany();
+
+    const issues: string[] = [];
+
+    for (const booking of bookings) {
+      if (!booking.employee) {
+        const msg = `Booking ${booking.id} references missing employee ${booking.employee_id}`;
+        this.logger.error(msg);
+        issues.push(msg);
+        continue;
+      }
+      if (booking.employee.restaurant_id !== restaurantId) {
+        const msg = `Booking ${booking.id} employee ${booking.employee_id} belongs to another restaurant`;
+        this.logger.error(msg);
+        issues.push(msg);
+      }
+    }
+
+    return { issues: issues.length, details: issues };
+  }
+
+  async cannotMakeShift(
+    shiftId: string,
+    employeeId: string,
+    userId: string,
+    reason?: string,
+  ) {
     const shift = await this.findOne(shiftId);
+    const employee = await this.employeesService.resolveForBooking(
+      userId,
+      shift.restaurant_id,
+      employeeId,
+    );
     const booking = shift.bookings?.find(
       (b) =>
-        b.employee_id === employeeId && b.status === ShiftBookingStatus.CONFIRMED,
+        b.employee_id === employee.id && b.status === ShiftBookingStatus.CONFIRMED,
     );
     if (!booking) {
       throw new BadRequestException('Ви не забронювали цю зміну');
@@ -540,7 +583,7 @@ export class ShiftsService {
 
     const request = this.replacementRepo.create({
       shift_id: shiftId,
-      employee_id: employeeId,
+      employee_id: employee.id,
       reason,
       status: ReplacementStatus.PENDING,
     });

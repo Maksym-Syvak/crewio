@@ -21,4 +21,8 @@ export class BookShiftDto {
 export class CannotMakeShiftDto {
   @IsString()
   employee_id: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }

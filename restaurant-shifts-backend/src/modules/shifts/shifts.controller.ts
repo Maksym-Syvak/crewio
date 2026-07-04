@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ShiftsService } from './shifts.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
@@ -57,13 +57,26 @@ export class ShiftsController {
 
   // Employee books an open shift
   @Post(':id/book')
-  book(@Param('id') id: string, @Body() dto: BookShiftDto) {
-    return this.shiftsService.book(id, dto);
+  book(
+    @Param('id') id: string,
+    @Body() dto: BookShiftDto,
+    @Req() req: { user: { sub: string } },
+  ) {
+    return this.shiftsService.book(id, dto, req.user.sub);
   }
 
   // Employee says "I can't make my shift" (TOR section 12)
   @Post(':id/cannot-make-it')
-  cannotMakeShift(@Param('id') id: string, @Body() dto: CannotMakeShiftDto) {
-    return this.shiftsService.cannotMakeShift(id, dto.employee_id);
+  cannotMakeShift(
+    @Param('id') id: string,
+    @Body() dto: CannotMakeShiftDto,
+    @Req() req: { user: { sub: string } },
+  ) {
+    return this.shiftsService.cannotMakeShift(
+      id,
+      dto.employee_id,
+      req.user.sub,
+      dto.reason,
+    );
   }
 }

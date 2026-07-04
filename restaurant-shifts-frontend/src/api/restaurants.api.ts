@@ -22,6 +22,15 @@ export const restaurantsApi = {
       .get<Restaurant[]>('/restaurants', { params: { ownerId } })
       .then((r) => r.data),
 
+  mine: () => api.get<Restaurant[]>('/restaurants/mine').then((r) => r.data),
+
+  integrityCheck: (restaurantId: string) =>
+    api
+      .post<{ issues: number; details: string[] }>('/restaurants/integrity-check', null, {
+        params: { restaurantId },
+      })
+      .then((r) => r.data),
+
   get: (id: string) =>
     api.get<Restaurant>(`/restaurants/${id}`).then((r) => r.data),
 

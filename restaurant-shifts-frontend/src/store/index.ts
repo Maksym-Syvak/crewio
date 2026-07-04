@@ -24,6 +24,9 @@ function sessionFromAuth(res: AuthResponse) {
     tokenExpiresAt: Date.now() + res.expiresIn * 1000,
     user: res.user,
     isAuthenticated: true,
+    employee: null,
+    restaurant: null,
+    activeInvitation: null,
     contextLoaded: false,
   };
 }
@@ -51,6 +54,7 @@ interface AuthState {
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
   loadContext: () => Promise<void>;
+  refreshContext: () => Promise<void>;
   completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
   createRestaurant: (payload: CreateRestaurantPayload) => Promise<void>;
   joinWithInvite: (token: string) => Promise<void>;
@@ -252,8 +256,39 @@ export const useAuthStore = create<AuthState>()(
           let employee: Employee | null = null;
 
           if (user.role === 'owner' || user.role === 'admin') {
-            const owned = await restaurantsApi.list(user.id);
+            const owned = await restaurantsApi.mine();
             restaurant = owned[0] ?? null;
+            if (restaurant) {
+              await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
+            }
+          } else {
+            const membership = await employeesApi.me();
+            employee = membership.employee;
+            restaurant = membership.restaurant;
+          }
+
+          set({ restaurant, employee, contextLoaded: true });
+        } catch {
+          set({ restaurant: null, employee: null, contextLoaded: true });
+        }
+      },
+
+      refreshContext: async () => {
+        const { user } = get();
+        if (!user) return;
+
+        set({ contextLoaded: false, restaurant: null, employee: null });
+
+        try {
+          let restaurant = null as Restaurant | null;
+          let employee: Employee | null = null;
+
+          if (user.role === 'owner' || user.role === 'admin') {
+            const owned = await restaurantsApi.mine();
+            restaurant = owned[0] ?? null;
+            if (restaurant) {
+              await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
+            }
           } else {
             const membership = await employeesApi.me();
             employee = membership.employee;
@@ -283,9 +318,10 @@ export const useAuthStore = create<AuthState>()(
 
       joinWithInvite: async (token) => {
         const { employee, restaurant } = await inviteApi.join(token);
+        const membership = await employeesApi.me().catch(() => null);
         set({
-          employee: employee as Employee,
-          restaurant,
+          employee: (membership?.employee ?? employee) as Employee,
+          restaurant: membership?.restaurant ?? restaurant,
           contextLoaded: true,
         });
       },
