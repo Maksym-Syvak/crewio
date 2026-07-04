@@ -189,7 +189,22 @@ export interface Statistics {
 
 export interface AuthResponse {
   accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
   user: User;
+}
+
+export interface PaginatedMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginatedMeta;
 }
 
 export interface ApiError {

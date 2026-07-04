@@ -7,12 +7,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
 import * as crypto from 'crypto';
+import { Repository } from 'typeorm';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/entities/user.entity';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { LoginPasswordDto } from './dto/login-password.dto';
 import { toPublicUser } from '../../common/utils/user-response';
+import { RefreshToken } from './entities/refresh-token.entity';
 
 interface TelegramAuthData {
   id: number;
@@ -28,6 +31,8 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokensRepo: Repository<RefreshToken>,
   ) {}
 
   verifyInitData(initData: string): TelegramAuthData {
@@ -71,22 +76,95 @@ export class AuthService {
     return JSON.parse(userJson) as TelegramAuthData;
   }
 
+  private getAccessExpiresInSeconds(): number {
+    const raw = this.config.get<string>('JWT_EXPIRES_IN', '900');
+    if (/^\d+$/.test(raw)) return parseInt(raw, 10);
+    if (raw.endsWith('d')) return parseInt(raw, 10) * 86_400;
+    if (raw.endsWith('h')) return parseInt(raw, 10) * 3_600;
+    if (raw.endsWith('m')) return parseInt(raw, 10) * 60;
+    return 900;
+  }
+
+  private hashToken(token: string) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private async createRefreshToken(userId: string): Promise<string> {
+    const token = crypto.randomBytes(32).toString('hex');
+    const days = parseInt(this.config.get<string>('JWT_REFRESH_EXPIRES_DAYS', '30'), 10);
+    const expires_at = new Date();
+    expires_at.setDate(expires_at.getDate() + days);
+
+    await this.refreshTokensRepo.save(
+      this.refreshTokensRepo.create({
+        user_id: userId,
+        token_hash: this.hashToken(token),
+        expires_at,
+      }),
+    );
+
+    return token;
+  }
+
   private signToken(user: { id: string; telegram_id: string; role: UserRole }) {
-    return this.jwtService.signAsync({
-      sub: user.id,
-      telegram_id: user.telegram_id,
-      role: user.role,
-    });
+    return this.jwtService.signAsync(
+      {
+        sub: user.id,
+        telegram_id: user.telegram_id,
+        role: user.role,
+      },
+      { expiresIn: this.getAccessExpiresInSeconds() },
+    );
   }
 
   private async buildAuthResponse(user: Awaited<ReturnType<UsersService['findById']>>) {
     if (!user) throw new UnauthorizedException('User not found');
     const accessToken = await this.signToken(user);
+    const refreshToken = await this.createRefreshToken(user.id);
     const withPassword = await this.usersService.findByIdWithPassword(user.id);
     return {
       accessToken,
+      refreshToken,
+      expiresIn: this.getAccessExpiresInSeconds(),
       user: toPublicUser(user, withPassword?.password_hash),
     };
+  }
+
+  async refreshSession(refreshToken: string) {
+    const stored = await this.refreshTokensRepo.findOne({
+      where: { token_hash: this.hashToken(refreshToken) },
+    });
+
+    if (!stored || stored.revoked_at || stored.expires_at < new Date()) {
+      throw new UnauthorizedException('Refresh token недійсний або прострочений');
+    }
+
+    await this.refreshTokensRepo.update(stored.id, { revoked_at: new Date() });
+
+    const user = await this.usersService.findById(stored.user_id);
+    if (!user) {
+      throw new UnauthorizedException('Користувача не знайдено');
+    }
+
+    return this.buildAuthResponse(user);
+  }
+
+  async logout(userId: string, refreshToken?: string) {
+    if (refreshToken) {
+      await this.refreshTokensRepo.update(
+        { user_id: userId, token_hash: this.hashToken(refreshToken) },
+        { revoked_at: new Date() },
+      );
+    } else {
+      await this.refreshTokensRepo
+        .createQueryBuilder()
+        .update(RefreshToken)
+        .set({ revoked_at: new Date() })
+        .where('user_id = :userId', { userId })
+        .andWhere('revoked_at IS NULL')
+        .execute();
+    }
+    return { ok: true };
   }
 
   async checkUser(initData: string) {

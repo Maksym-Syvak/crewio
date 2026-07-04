@@ -115,8 +115,9 @@ export class InvitationTokensService {
       );
     }
 
-    const existing = (await this.employeesService.findAll(invite.restaurant_id)).find(
-      (e) => e.user_id === userId,
+    const existing = await this.employeesService.findByUserAndRestaurant(
+      userId,
+      invite.restaurant_id,
     );
     if (existing) {
       throw new BadRequestException('Ви вже приєднані до цього закладу');

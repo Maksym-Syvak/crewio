@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ShiftsService } from './shifts.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
+import { GenerateScheduleDto } from './dto/generate-schedule.dto';
 import { BookShiftDto, CannotMakeShiftDto } from './dto/book-shift.dto';
 import { ShiftStatus } from './entities/shift.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -28,6 +29,12 @@ export class ShiftsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.shiftsService.findOne(id);
+  }
+
+  @Roles('owner', 'admin')
+  @Post('generate')
+  generate(@Body() dto: GenerateScheduleDto) {
+    return this.shiftsService.generateSchedule(dto);
   }
 
   @Roles('owner', 'admin')

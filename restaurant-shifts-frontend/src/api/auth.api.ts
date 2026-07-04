@@ -1,5 +1,8 @@
+import axios from 'axios';
 import { api } from './client';
 import type { AuthResponse, UserRole } from '@/types';
+
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 export interface CheckUserResponse {
   exists: boolean;
@@ -51,7 +54,13 @@ export const authApi = {
   completeProfile: (payload: CompleteProfilePayload) =>
     api.post<AuthResponse>('/auth/complete-profile', payload).then((r) => r.data),
 
-  logout: () => api.post<{ ok: boolean }>('/auth/logout').then((r) => r.data),
+  refresh: (refreshToken: string) =>
+    axios
+      .post<AuthResponse>(`${API_URL}/auth/refresh`, { refreshToken })
+      .then((r) => r.data),
+
+  logout: (refreshToken?: string) =>
+    api.post<{ ok: boolean }>('/auth/logout', { refreshToken }).then((r) => r.data),
 
   me: () => api.post('/auth/me').then((r) => r.data),
 };

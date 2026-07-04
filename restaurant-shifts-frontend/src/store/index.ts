@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
+  AuthResponse,
   Employee,
   InvitationToken,
   Notification,
@@ -16,9 +17,22 @@ import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
 import { getErrorMessage, withRetry } from '@/api/client';
 
+function sessionFromAuth(res: AuthResponse) {
+  return {
+    token: res.accessToken,
+    refreshToken: res.refreshToken,
+    tokenExpiresAt: Date.now() + res.expiresIn * 1000,
+    user: res.user,
+    isAuthenticated: true,
+    contextLoaded: false,
+  };
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
+  tokenExpiresAt: number | null;
   employee: Employee | null;
   restaurant: Restaurant | null;
   activeInvitation: InvitationToken | null;
@@ -26,6 +40,8 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  setSession: (res: AuthResponse) => void;
+  refreshAccessToken: () => Promise<string>;
   login: () => Promise<void>;
   register: () => Promise<void>;
   restoreAccount: () => Promise<void>;
@@ -46,6 +62,8 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       token: null,
+      refreshToken: null,
+      tokenExpiresAt: null,
       employee: null,
       restaurant: null,
       activeInvitation: null,
@@ -53,6 +71,16 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+
+      setSession: (res) => set(sessionFromAuth(res)),
+
+      refreshAccessToken: async () => {
+        const { refreshToken } = get();
+        if (!refreshToken) throw new Error('No refresh token');
+        const res = await authApi.refresh(refreshToken);
+        set(sessionFromAuth(res));
+        return res.accessToken;
+      },
 
       login: async () => {
         set({ isLoading: true, error: null });
@@ -64,13 +92,18 @@ export const useAuthStore = create<AuthState>()(
           }
           tg.ready();
           tg.expand();
-          const { accessToken, user } = await withRetry(() =>
-            authApi.login(initData),
-          );
-          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          const res = await withRetry(() => authApi.login(initData));
+          set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
-          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          set({
+            error: getErrorMessage(e),
+            isAuthenticated: false,
+            token: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            user: null,
+          });
           throw e;
         } finally {
           set({ isLoading: false });
@@ -84,11 +117,18 @@ export const useAuthStore = create<AuthState>()(
           if (!initData) {
             throw new Error('Відкрийте застосунок у Telegram');
           }
-          const { accessToken, user } = await authApi.register(initData);
-          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          const res = await authApi.register(initData);
+          set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
-          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          set({
+            error: getErrorMessage(e),
+            isAuthenticated: false,
+            token: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            user: null,
+          });
           throw e;
         } finally {
           set({ isLoading: false });
@@ -102,11 +142,18 @@ export const useAuthStore = create<AuthState>()(
           if (!initData) {
             throw new Error('Відкрийте застосунок у Telegram');
           }
-          const { accessToken, user } = await authApi.restoreAccount(initData);
-          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          const res = await authApi.restoreAccount(initData);
+          set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
-          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          set({
+            error: getErrorMessage(e),
+            isAuthenticated: false,
+            token: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            user: null,
+          });
           throw e;
         } finally {
           set({ isLoading: false });
@@ -120,11 +167,18 @@ export const useAuthStore = create<AuthState>()(
           if (!initData) {
             throw new Error('Відкрийте застосунок у Telegram');
           }
-          const { accessToken, user } = await authApi.recreateAccount(initData);
-          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          const res = await authApi.recreateAccount(initData);
+          set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
-          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          set({
+            error: getErrorMessage(e),
+            isAuthenticated: false,
+            token: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            user: null,
+          });
           throw e;
         } finally {
           set({ isLoading: false });
@@ -142,11 +196,18 @@ export const useAuthStore = create<AuthState>()(
       loginWithPassword: async (login, password) => {
         set({ isLoading: true, error: null });
         try {
-          const { accessToken, user } = await authApi.loginPassword(login, password);
-          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          const res = await authApi.loginPassword(login, password);
+          set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
-          set({ error: getErrorMessage(e), isAuthenticated: false, token: null, user: null });
+          set({
+            error: getErrorMessage(e),
+            isAuthenticated: false,
+            token: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            user: null,
+          });
           throw e;
         } finally {
           set({ isLoading: false });
@@ -156,11 +217,8 @@ export const useAuthStore = create<AuthState>()(
       devLogin: async (telegramId: string) => {
         set({ isLoading: true, error: null });
         try {
-          const { accessToken, user } = await authApi.devLogin(
-            telegramId,
-            'Dev User',
-          );
-          set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+          const res = await authApi.devLogin(telegramId, 'Dev User');
+          set(sessionFromAuth(res));
           await get().loadContext().catch(() => undefined);
         } catch (e) {
           set({ error: getErrorMessage(e) });
@@ -174,6 +232,8 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           token: null,
+          refreshToken: null,
+          tokenExpiresAt: null,
           employee: null,
           restaurant: null,
           activeInvitation: null,
@@ -207,8 +267,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       completeProfile: async (payload) => {
-        const { accessToken, user } = await authApi.completeProfile(payload);
-        set({ token: accessToken, user, isAuthenticated: true, contextLoaded: false });
+        const res = await authApi.completeProfile(payload);
+        set(sessionFromAuth(res));
         await get().loadContext().catch(() => undefined);
       },
 
@@ -241,6 +301,8 @@ export const useAuthStore = create<AuthState>()(
       name: 'crewio-auth',
       partialize: (s) => ({
         token: s.token,
+        refreshToken: s.refreshToken,
+        tokenExpiresAt: s.tokenExpiresAt,
         user: s.user,
         isAuthenticated: s.isAuthenticated,
       }),

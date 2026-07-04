@@ -27,7 +27,9 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
-        value: 7d
+        value: 900
+      - key: JWT_REFRESH_EXPIRES_DAYS
+        value: "30"
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET

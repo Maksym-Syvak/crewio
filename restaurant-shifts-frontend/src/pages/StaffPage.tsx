@@ -1,24 +1,63 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { employeesApi } from '@/api/employees.api';
 import { useAuthStore } from '@/store';
 import type { Employee } from '@/types';
 import { PageSkeleton } from '@/components/Skeleton';
 
+const PAGE_SIZE = 20;
+
 export default function StaffPage() {
   const restaurant = useAuthStore((s) => s.restaurant);
   const [staff, setStaff] = useState<Employee[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const loadPage = useCallback(
+    async (pageNum: number, append: boolean) => {
+      if (!restaurant) return;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+
+      try {
+        const res = await employeesApi.list(restaurant.id, pageNum, PAGE_SIZE);
+        setStaff((prev) => (append ? [...prev, ...res.data] : res.data));
+        setHasMore(res.meta.hasMore);
+        setPage(pageNum);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [restaurant],
+  );
 
   useEffect(() => {
     if (!restaurant) return;
-    employeesApi
-      .list(restaurant.id)
-      .then(setStaff)
-      .finally(() => setLoading(false));
-  }, [restaurant]);
+    loadPage(1, false);
+  }, [restaurant, loadPage]);
 
-  if (loading) return <PageSkeleton />;
+  useEffect(() => {
+    if (!hasMore || loading || loadingMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadPage(page + 1, true);
+        }
+      },
+      { rootMargin: '120px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, loadPage, page]);
+
+  if (loading && staff.length === 0) return <PageSkeleton />;
 
   return (
     <div className="page">
@@ -62,6 +101,12 @@ export default function StaffPage() {
       {staff.length === 0 && (
         <p className="text-center text-sm text-[var(--tg-hint)]">
           Персонал порожній
+        </p>
+      )}
+      {hasMore && <div ref={sentinelRef} className="h-8" />}
+      {loadingMore && (
+        <p className="py-3 text-center text-sm text-[var(--tg-hint)]">
+          Завантаження...
         </p>
       )}
     </div>

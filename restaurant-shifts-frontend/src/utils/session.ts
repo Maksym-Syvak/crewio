@@ -8,7 +8,8 @@ export async function clearAppSession() {
   disconnectSocket();
 
   try {
-    await authApi.logout();
+    const refreshToken = useAuthStore.getState().refreshToken ?? undefined;
+    await authApi.logout(refreshToken);
   } catch {
     // JWT is stateless — local cleanup still proceeds
   }

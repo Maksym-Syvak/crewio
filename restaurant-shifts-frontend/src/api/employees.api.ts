@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Employee, Restaurant } from '@/types';
+import type { Employee, PaginatedResponse, Restaurant } from '@/types';
 
 export const employeesApi = {
   me: () =>
@@ -9,9 +9,11 @@ export const employeesApi = {
       )
       .then((r) => r.data),
 
-  list: (restaurantId?: string) =>
+  list: (restaurantId?: string, page = 1, limit = 20) =>
     api
-      .get<Employee[]>('/employees', { params: { restaurantId } })
+      .get<PaginatedResponse<Employee>>('/employees', {
+        params: { restaurantId, page, limit },
+      })
       .then((r) => r.data),
 
   get: (id: string) =>

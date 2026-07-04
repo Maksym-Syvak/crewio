@@ -52,6 +52,8 @@ function AppBootstrap() {
       {
         onFail: () => setApiUnreachable(true),
         onOk: () => setApiUnreachable(false),
+        tokenExpiresAtGetter: () => useAuthStore.getState().tokenExpiresAt,
+        refreshHandler: () => useAuthStore.getState().refreshAccessToken(),
       },
     );
   }, [logout, setApiUnreachable]);

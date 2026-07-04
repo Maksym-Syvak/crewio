@@ -10,22 +10,80 @@ export const api = axios.create({
 });
 
 let getToken: (() => string | null) | null = null;
+let getTokenExpiresAt: (() => number | null) | null = null;
 let onUnauthorized: (() => void) | null = null;
+let refreshSession: (() => Promise<string>) | null = null;
 let onNetworkError: (() => void) | null = null;
 let onNetworkOk: (() => void) | null = null;
+
+let isRefreshing = false;
+let refreshQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
+
+function processRefreshQueue(error: unknown, token: string | null = null) {
+  refreshQueue.forEach(({ resolve, reject }) => {
+    if (error) reject(error);
+    else if (token) resolve(token);
+  });
+  refreshQueue = [];
+}
+
+function isAuthEndpoint(url?: string) {
+  if (!url) return false;
+  return (
+    url.includes('/auth/login') ||
+    url.includes('/auth/register') ||
+    url.includes('/auth/refresh') ||
+    url.includes('/auth/check-user') ||
+    url.includes('/auth/dev-login') ||
+    url.includes('/auth/login-password')
+  );
+}
 
 export function setupApiInterceptors(
   tokenGetter: () => string | null,
   unauthorizedHandler: () => void,
-  networkHandlers?: { onFail?: () => void; onOk?: () => void },
+  options?: {
+    onFail?: () => void;
+    onOk?: () => void;
+    tokenExpiresAtGetter?: () => number | null;
+    refreshHandler?: () => Promise<string>;
+  },
 ) {
   getToken = tokenGetter;
   onUnauthorized = unauthorizedHandler;
-  onNetworkError = networkHandlers?.onFail ?? null;
-  onNetworkOk = networkHandlers?.onOk ?? null;
+  onNetworkError = options?.onFail ?? null;
+  onNetworkOk = options?.onOk ?? null;
+  getTokenExpiresAt = options?.tokenExpiresAtGetter ?? null;
+  refreshSession = options?.refreshHandler ?? null;
 }
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const expiresAt = getTokenExpiresAt?.();
+  if (
+    refreshSession &&
+    expiresAt &&
+    Date.now() > expiresAt - 60_000 &&
+    !isAuthEndpoint(config.url)
+  ) {
+    try {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        const newToken = await refreshSession();
+        processRefreshQueue(null, newToken);
+        isRefreshing = false;
+      } else {
+        await new Promise<string>((resolve, reject) => {
+          refreshQueue.push({ resolve, reject });
+        });
+      }
+    } catch {
+      // refresh failed — request may still 401
+    }
+  }
+
   const token = getToken?.();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -39,9 +97,51 @@ api.interceptors.response.use(
     return res;
   },
   async (error: AxiosError<ApiError>) => {
-    if (error.response?.status === 401) {
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isAuthEndpoint(originalRequest.url) &&
+      refreshSession
+    ) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        try {
+          const token = await new Promise<string>((resolve, reject) => {
+            refreshQueue.push({ resolve, reject });
+          });
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        } catch (e) {
+          onUnauthorized?.();
+          return Promise.reject(e);
+        }
+      }
+
+      isRefreshing = true;
+      try {
+        const newToken = await refreshSession();
+        processRefreshQueue(null, newToken);
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        processRefreshQueue(refreshError, null);
+        onUnauthorized?.();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    if (error.response?.status === 401 && !isAuthEndpoint(originalRequest?.url)) {
       onUnauthorized?.();
     }
+
     if (!error.response) {
       onNetworkError?.();
     }

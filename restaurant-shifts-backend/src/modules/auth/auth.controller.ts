@@ -5,6 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { LoginPasswordDto } from './dto/login-password.dto';
 import { DevLoginDto } from './dto/dev-login.dto';
+import { RefreshDto, LogoutDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @ApiTags('auth')
@@ -37,6 +38,11 @@ export class AuthController {
     return this.authService.recreateAccount(dto.initData);
   }
 
+  @Post('refresh')
+  refresh(@Body() dto: RefreshDto) {
+    return this.authService.refreshSession(dto.refreshToken);
+  }
+
   @Post('login-password')
   loginPassword(@Body() dto: LoginPasswordDto) {
     return this.authService.loginWithPassword(dto);
@@ -55,8 +61,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  logout() {
-    return { ok: true };
+  logout(@Req() req: { user: { sub: string } }, @Body() dto: LogoutDto) {
+    return this.authService.logout(req.user.sub, dto?.refreshToken);
   }
 
   @UseGuards(JwtAuthGuard)

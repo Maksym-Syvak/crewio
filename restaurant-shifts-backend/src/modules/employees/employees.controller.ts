@@ -6,6 +6,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 @ApiTags('employees')
 @ApiBearerAuth()
@@ -15,8 +16,15 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get()
-  findAll(@Query('restaurantId') restaurantId?: string) {
-    return this.employeesService.findAll(restaurantId);
+  findAll(
+    @Query('restaurantId') restaurantId?: string,
+    @Query() pagination?: PaginationQueryDto,
+  ) {
+    return this.employeesService.findAll(
+      restaurantId,
+      pagination?.page ?? 1,
+      pagination?.limit ?? 20,
+    );
   }
 
   @Get('me')

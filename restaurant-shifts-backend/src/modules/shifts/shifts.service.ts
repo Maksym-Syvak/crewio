@@ -11,6 +11,8 @@ import {
 } from '../replacement-requests/entities/replacement-request.entity';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
+import { GenerateScheduleDto } from './dto/generate-schedule.dto';
+import { generateShiftSlots } from './utils/schedule-generator';
 
 const MAX_WEEKLY_HOURS = 60; // simple guardrail; make this configurable per restaurant later
 
@@ -68,6 +70,45 @@ export class ShiftsService {
     this.events.emit('shift.created', saved);
     if (saved.is_urgent) this.events.emit('shift.emergency', saved);
     return saved;
+  }
+
+  async generateSchedule(dto: GenerateScheduleDto) {
+    const slots = generateShiftSlots(dto);
+    const created: Shift[] = [];
+    let skipped = 0;
+
+    for (const slot of slots) {
+      if (dto.skip_existing !== false) {
+        const exists = await this.shiftsRepo.count({
+          where: {
+            restaurant_id: dto.restaurant_id,
+            position_id: dto.position_id,
+            start_time: slot.start_time,
+          },
+        });
+        if (exists > 0) {
+          skipped++;
+          continue;
+        }
+      }
+
+      const shift = await this.create({
+        restaurant_id: dto.restaurant_id,
+        position_id: dto.position_id,
+        start_time: slot.start_time.toISOString(),
+        end_time: slot.end_time.toISOString(),
+        required_employees: dto.required_employees ?? 1,
+        is_urgent: false,
+      });
+      created.push(shift);
+    }
+
+    return {
+      created: created.length,
+      skipped,
+      total: slots.length,
+      shifts: created,
+    };
   }
 
   async update(id: string, dto: UpdateShiftDto) {

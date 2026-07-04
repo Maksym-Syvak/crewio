@@ -32,8 +32,8 @@ export default function StatisticsPage() {
 
       try {
         if (showStaffPicker && restaurant) {
-          const list = await employeesApi.list(restaurant.id);
-          if (!cancelled) setStaff(list);
+          const list = await employeesApi.list(restaurant.id, 1, 100);
+          if (!cancelled) setStaff(list.data);
           return;
         }
 

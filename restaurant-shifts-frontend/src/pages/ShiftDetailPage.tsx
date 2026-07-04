@@ -5,6 +5,7 @@ import { replacementsApi } from '@/api/replacements.api';
 import { useAuthStore, useToastStore } from '@/store';
 import { formatDate, formatTime, shiftDurationHours } from '@/utils/dates';
 import { getErrorMessage } from '@/api/client';
+import { isAdminRole } from '@/utils/roles';
 import type { Shift } from '@/types';
 import { PageSkeleton } from '@/components/Skeleton';
 
@@ -12,6 +13,7 @@ export default function ShiftDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const employee = useAuthStore((s) => s.employee);
+  const user = useAuthStore((s) => s.user);
   const push = useToastStore((s) => s.push);
   const [shift, setShift] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,37 @@ export default function ShiftDetailPage() {
       }
       await replacementsApi.apply(pending.id, employee.id);
       push({ type: 'success', title: 'Ви відгукнулись на заміну' });
+    } catch (e) {
+      push({ type: 'error', title: getErrorMessage(e) });
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const isAdmin = Boolean(user && isAdminRole(user.role));
+
+  const handleMarkDayOff = async () => {
+    if (!shift) return;
+    if (!confirm('Скасувати цю зміну (вихідний)?')) return;
+    setActing(true);
+    try {
+      await shiftsApi.remove(shift.id);
+      push({ type: 'success', title: 'Зміну скасовано' });
+      navigate(-1);
+    } catch (e) {
+      push({ type: 'error', title: getErrorMessage(e) });
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleMarkHoliday = async () => {
+    if (!shift) return;
+    setActing(true);
+    try {
+      const updated = await shiftsApi.update(shift.id, { is_urgent: true });
+      setShift(updated);
+      push({ type: 'success', title: 'Позначено як святкову зміну' });
     } catch (e) {
       push({ type: 'error', title: getErrorMessage(e) });
     } finally {
@@ -177,6 +210,28 @@ export default function ShiftDetailPage() {
           >
             Запропонувати заміну
           </button>
+        )}
+        {isAdmin && (
+          <>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={acting}
+              onClick={handleMarkDayOff}
+            >
+              Зробити вихідним
+            </button>
+            {!shift.is_urgent && (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={acting}
+                onClick={handleMarkHoliday}
+              >
+                Святкова зміна
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

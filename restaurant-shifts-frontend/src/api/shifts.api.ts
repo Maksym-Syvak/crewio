@@ -35,3 +35,36 @@ export const shiftsApi = {
       .post(`/shifts/${id}/cannot-make-it`, { employee_id })
       .then((r) => r.data),
 };
+
+export type ScheduleMode = 'weekly' | 'rotation' | 'custom_cycle';
+export type RotationPreset = '5_2' | '2_2' | '3_3' | 'custom';
+
+export interface GenerateSchedulePayload {
+  restaurant_id: string;
+  position_id: string;
+  mode: ScheduleMode;
+  date_from: string;
+  date_to: string;
+  start_time: string;
+  end_time: string;
+  required_employees?: number;
+  weekdays?: number[];
+  preset?: RotationPreset;
+  work_days?: number;
+  rest_days?: number;
+  skip_existing?: boolean;
+}
+
+export interface GenerateScheduleResult {
+  created: number;
+  skipped: number;
+  total: number;
+  shifts: Shift[];
+}
+
+export const scheduleApi = {
+  generate: (payload: GenerateSchedulePayload) =>
+    api
+      .post<GenerateScheduleResult>('/shifts/generate', payload)
+      .then((r) => r.data),
+};
