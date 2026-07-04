@@ -35,6 +35,13 @@ function sessionFromAuth(res: AuthResponse) {
   };
 }
 
+interface WorkspaceCache {
+  workspaces: Workspace[];
+  restaurant: Restaurant;
+  employee: Employee | null;
+  workspaceRole: UserRole | null;
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -295,13 +302,23 @@ export const useAuthStore = create<AuthState>()(
 
       applyWorkspace: (workspaces: Workspace[], preferredRestaurantId?: string | null) => {
         const { activeRestaurantId } = get();
-        const targetId =
-          preferredRestaurantId ??
-          (activeRestaurantId &&
-          workspaces.some((w) => w.restaurant.id === activeRestaurantId)
-            ? activeRestaurantId
-            : workspaces[0]?.restaurant.id ?? null);
-        const active = workspaces.find((w) => w.restaurant.id === targetId) ?? null;
+        const candidateId = preferredRestaurantId ?? activeRestaurantId;
+        const validCandidate =
+          candidateId && workspaces.some((w) => w.restaurant.id === candidateId)
+            ? candidateId
+            : null;
+
+        let targetId: string | null = null;
+        if (validCandidate) {
+          targetId = validCandidate;
+        } else if (workspaces.length === 1) {
+          targetId = workspaces[0].restaurant.id;
+        }
+
+        const active = targetId
+          ? workspaces.find((w) => w.restaurant.id === targetId) ?? null
+          : null;
+
         set({
           workspaces,
           activeRestaurantId: targetId,
@@ -416,7 +433,40 @@ export const useAuthStore = create<AuthState>()(
         user: s.user,
         isAuthenticated: s.isAuthenticated,
         activeRestaurantId: s.activeRestaurantId,
+        workspaceCache:
+          s.restaurant && s.workspaces.length > 0
+            ? {
+                workspaces: s.workspaces,
+                restaurant: s.restaurant,
+                employee: s.employee,
+                workspaceRole: s.workspaceRole,
+              }
+            : null,
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<AuthState> & {
+          workspaceCache?: WorkspaceCache | null;
+        };
+        const { workspaceCache, ...authFields } = persisted;
+        const merged = {
+          ...currentState,
+          ...authFields,
+          contextLoaded: false,
+        } as AuthState;
+
+        if (
+          workspaceCache &&
+          authFields.activeRestaurantId &&
+          workspaceCache.restaurant.id === authFields.activeRestaurantId
+        ) {
+          merged.workspaces = workspaceCache.workspaces;
+          merged.restaurant = workspaceCache.restaurant;
+          merged.employee = workspaceCache.employee;
+          merged.workspaceRole = workspaceCache.workspaceRole;
+        }
+
+        return merged;
+      },
     },
   ),
 );

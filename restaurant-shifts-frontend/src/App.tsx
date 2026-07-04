@@ -4,6 +4,7 @@ import { AppLayout } from '@/layouts/AppLayout';
 import { OnboardingLayout } from '@/layouts/OnboardingLayout';
 import { RouteGuard } from '@/components/RouteGuard';
 import { OnboardingGuard, OnboardingOnlyGuard } from '@/components/OnboardingGuard';
+import { WorkspaceReadyGuard } from '@/components/WorkspaceReadyGuard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PageSkeleton } from '@/components/Skeleton';
 import { setupApiInterceptors } from '@/api/client';
@@ -25,6 +26,7 @@ const StaffPage = lazy(() => import('@/pages/StaffPage'));
 const EmployeeProfilePage = lazy(() => import('@/pages/EmployeeProfilePage'));
 const CreateShiftPage = lazy(() => import('@/pages/CreateShiftPage'));
 const StatisticsPage = lazy(() => import('@/pages/StatisticsPage'));
+const WorkspaceSelectionPage = lazy(() => import('@/pages/WorkspaceSelectionPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/ForbiddenPage'));
 
@@ -117,7 +119,9 @@ function AppBootstrap() {
             </RouteGuard>
           }
         >
-          <Route element={<AppLayout />}>
+          <Route path="workspaces" element={<WorkspaceSelectionPage />} />
+          <Route element={<WorkspaceReadyGuard />}>
+            <Route element={<AppLayout />}>
             <Route index element={<HomePage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="shifts" element={<ShiftsPage />} />
@@ -167,6 +171,7 @@ function AppBootstrap() {
                 </RouteGuard>
               }
             />
+          </Route>
           </Route>
         </Route>
 

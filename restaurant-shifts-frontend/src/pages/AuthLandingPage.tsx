@@ -21,6 +21,7 @@ export default function AuthLandingPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const contextLoaded = useAuthStore((s) => s.contextLoaded);
   const resetOnboarding = useOnboardingStore((s) => s.reset);
 
   const [devId, setDevId] = useState('000000001');
@@ -36,10 +37,10 @@ export default function AuthLandingPage() {
   }, [navigate]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && contextLoaded) {
       navigate(getPostLoginPath(), { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, contextLoaded, navigate]);
 
   useEffect(() => {
     if (
@@ -137,6 +138,9 @@ export default function AuthLandingPage() {
     !isAwaitingTelegramSwitch() &&
     isLoading;
 
+  const showRestoringSession =
+    isAuthenticated && !contextLoaded && !skipAutoAuth;
+
   const showManualLogin =
     isTelegramEnv() &&
     !isAuthenticated &&
@@ -163,6 +167,13 @@ export default function AuthLandingPage() {
         <div className="flex flex-col items-center gap-3">
           <div className="spinner" />
           <p className="text-sm text-[var(--tg-hint)]">Авторизація...</p>
+        </div>
+      )}
+
+      {showRestoringSession && (
+        <div className="flex flex-col items-center gap-3">
+          <div className="spinner" />
+          <p className="text-sm text-[var(--tg-hint)]">Завантаження...</p>
         </div>
       )}
 

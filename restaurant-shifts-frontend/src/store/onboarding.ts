@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { UserRole } from '@/types';
 import type { CreateRestaurantPayload } from '@/api/restaurants.api';
 import { useAuthStore } from '@/store';
+import { needsWorkspaceSelection } from '@/utils/workspace';
 
 export type OnboardingStep =
   | 'welcome'
@@ -146,7 +147,8 @@ export function effectiveOnboardingRole(
 }
 
 export function getPostLoginPath(): string {
-  const { user, workspaces, contextLoaded } = useAuthStore.getState();
+  const { user, workspaces, contextLoaded, activeRestaurantId } =
+    useAuthStore.getState();
   const { profileSubmitted, selectedRole } = useOnboardingStore.getState();
 
   if (needsProfileSetup(user, profileSubmitted)) {
@@ -158,6 +160,10 @@ export function getPostLoginPath(): string {
     return role === 'employee'
       ? ONBOARDING_PATHS.join
       : ONBOARDING_PATHS.create;
+  }
+
+  if (needsWorkspaceSelection(workspaces, activeRestaurantId, contextLoaded)) {
+    return '/workspaces';
   }
 
   return '/';

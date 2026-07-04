@@ -4,7 +4,6 @@ import { useAuthStore, useNotificationsStore, useShiftsStore } from '@/store';
 import { ShiftCard } from '@/components/ShiftCard';
 import { PageSkeleton } from '@/components/Skeleton';
 import { dayjs } from '@/utils/dates';
-import { ROLE_LABELS } from '@/utils/roles';
 import { isEmployeeBooked, isShiftFull } from '@/utils/shifts';
 
 export default function HomePage() {
@@ -14,7 +13,7 @@ export default function HomePage() {
   const restaurant = useAuthStore((s) => s.restaurant);
   const workspaces = useAuthStore((s) => s.workspaces);
   const workspaceRole = useAuthStore((s) => s.workspaceRole);
-  const switchWorkspace = useAuthStore((s) => s.switchWorkspace);
+  const contextLoaded = useAuthStore((s) => s.contextLoaded);
   const shifts = useShiftsStore((s) => s.shifts);
   const isLoading = useShiftsStore((s) => s.isLoading);
   const fetchShifts = useShiftsStore((s) => s.fetchShifts);
@@ -64,7 +63,7 @@ export default function HomePage() {
 
   if (isLoading && !shifts.length && restaurant) return <PageSkeleton />;
 
-  if (workspaces.length === 0) {
+  if (contextLoaded && workspaces.length === 0) {
     return (
       <div className="page">
         <h1 className="page-title">Привіт, {user?.first_name ?? 'користувач'} 👋</h1>
@@ -101,37 +100,6 @@ export default function HomePage() {
       <h1 className="page-title">
         Привіт, {user?.first_name ?? 'користувач'} 👋
       </h1>
-
-      {workspaces.length > 1 && (
-        <section className="mb-5">
-          <h2 className="mb-2 text-base font-semibold">Ваші заклади</h2>
-          <ul className="space-y-2">
-            {workspaces.map((ws) => (
-              <li key={ws.restaurant.id}>
-                <button
-                  type="button"
-                  className={`card flex w-full items-center justify-between text-left ${
-                    ws.restaurant.id === restaurant?.id
-                      ? 'ring-2 ring-[var(--tg-button)]/30'
-                      : ''
-                  }`}
-                  onClick={() => void switchWorkspace(ws.restaurant.id)}
-                >
-                  <span>
-                    <span className="block font-medium">🏪 {ws.restaurant.name}</span>
-                    <span className="text-xs text-[var(--tg-hint)]">
-                      {ROLE_LABELS[ws.role]}
-                    </span>
-                  </span>
-                  {ws.restaurant.id === restaurant?.id && (
-                    <span className="text-xs text-[var(--tg-link)]">активний</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       <div className="mb-4 grid grid-cols-2 gap-3">
         <StatCard label="Змін за місяць" value={String(monthShifts)} />
