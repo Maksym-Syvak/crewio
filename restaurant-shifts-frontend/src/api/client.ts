@@ -168,6 +168,14 @@ export function getErrorMessage(error: unknown): string {
   return 'Невідома помилка';
 }
 
+export function isNotFoundError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
+export function isConflictError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 409;
+}
+
 /** Retry once — useful when Render free tier wakes from sleep. */
 export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {

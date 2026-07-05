@@ -1,4 +1,6 @@
 /** Apply Crewio burgundy theme; respect Telegram light/dark mode. */
+import { sleep } from '@/utils/async';
+
 export function initTelegramApp() {
   const tg = window.Telegram?.WebApp;
   const root = document.documentElement;
@@ -38,12 +40,41 @@ function applyCrewioTheme(isDark: boolean) {
 }
 
 export function isTelegramEnv() {
-  return Boolean(window.Telegram?.WebApp?.initData);
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return false;
+  return Boolean(tg.initData?.trim() || tg.initDataUnsafe?.user?.id);
 }
 
 /** Raw Telegram WebApp platform (tdesktop, android, ios, …). */
 export function getTelegramPlatform() {
   return window.Telegram?.WebApp?.platform ?? 'unknown';
+}
+
+/** Telegram Desktop may expose initData shortly after ready(). */
+export async function waitForTelegramInitData(maxWaitMs = 5000): Promise<string> {
+  const tg = window.Telegram?.WebApp;
+  if (!tg) {
+    throw new Error('Відкрийте застосунок у Telegram');
+  }
+
+  tg.ready();
+  tg.expand();
+
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    const initData = tg.initData?.trim();
+    if (initData) return initData;
+    await sleep(100);
+  }
+
+  throw new Error(
+    'Telegram не передав дані авторизації. Закрийте та відкрийте застосунок ще раз.',
+  );
+}
+
+export function getTelegramUserIdFromClient(): string | null {
+  const id = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  return id != null ? String(id).trim() : null;
 }
 
 export function closeTelegramApp() {
