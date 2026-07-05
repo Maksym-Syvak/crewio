@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Employee } from '../../employees/entities/employee.entity';
 import { Restaurant } from '../../restaurants/entities/restaurant.entity';
+import { normalizeTelegramId } from '../../../common/utils/telegram-id.util';
 
 export enum UserRole {
   OWNER = 'owner',
@@ -20,7 +21,14 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'bigint', unique: true })
+  @Column({
+    type: 'bigint',
+    unique: true,
+    transformer: {
+      to: (value: string) => normalizeTelegramId(value),
+      from: (value: string | number) => normalizeTelegramId(value),
+    },
+  })
   telegram_id: string;
 
   @Column({ nullable: true })

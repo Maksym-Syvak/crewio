@@ -11,6 +11,7 @@ import { Notification } from '../notifications/entities/notification.entity';
 import { Statistics } from '../statistics/entities/statistics.entity';
 import { Restaurant } from '../restaurants/entities/restaurant.entity';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { normalizeTelegramId } from '../../common/utils/telegram-id.util';
 
 @Injectable()
 export class UsersService {
@@ -27,20 +28,22 @@ export class UsersService {
     private readonly restaurantsRepo: Repository<Restaurant>,
   ) {}
 
-  findByTelegramId(telegramId: string) {
+  findByTelegramId(telegramId: string | number) {
+    const id = normalizeTelegramId(telegramId);
     return this.usersRepo.findOne({
-      where: { telegram_id: telegramId, is_deleted: false },
+      where: { telegram_id: id, is_deleted: false },
     });
   }
 
-  findAnyByTelegramId(telegramId: string) {
+  findAnyByTelegramId(telegramId: string | number) {
+    const id = normalizeTelegramId(telegramId);
     return this.usersRepo.findOne({
-      where: { telegram_id: telegramId },
+      where: { telegram_id: id },
       withDeleted: true,
     });
   }
 
-  async getTelegramUserStatus(telegramId: string) {
+  async getTelegramUserStatus(telegramId: string | number) {
     const user = await this.findAnyByTelegramId(telegramId);
     if (!user) {
       return { exists: false, deleted: false, can_restore: false };
@@ -66,7 +69,10 @@ export class UsersService {
   }
 
   create(data: Partial<User>) {
-    const user = this.usersRepo.create(data);
+    const user = this.usersRepo.create({
+      ...data,
+      telegram_id: data.telegram_id != null ? normalizeTelegramId(data.telegram_id) : undefined,
+    });
     return this.usersRepo.save(user);
   }
 

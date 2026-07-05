@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 // The Mini App frontend sends the raw `initData` string it receives from
 // window.Telegram.WebApp.initData. The backend verifies its signature
@@ -7,4 +7,9 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty()
   initData: string;
+
+  /** Telegram WebApp platform (tdesktop, android, ios, …) */
+  @IsOptional()
+  @IsString()
+  platform?: string;
 }

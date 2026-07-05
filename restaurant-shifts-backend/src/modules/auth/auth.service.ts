@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -14,10 +15,12 @@ import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/entities/user.entity';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { toPublicUser } from '../../common/utils/user-response';
+import { normalizeTelegramId } from '../../common/utils/telegram-id.util';
+import { classifyTelegramPlatform } from '../../common/utils/telegram-platform.util';
 import { RefreshToken } from './entities/refresh-token.entity';
 
 interface TelegramAuthData {
-  id: number;
+  id: number | string;
   first_name: string;
   last_name?: string;
   username?: string;
@@ -26,6 +29,7 @@ interface TelegramAuthData {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     private readonly config: ConfigService,
     private readonly jwtService: JwtService,
@@ -73,6 +77,50 @@ export class AuthService {
       throw new UnauthorizedException('Missing user in initData');
     }
     return JSON.parse(userJson) as TelegramAuthData;
+  }
+
+  private resolvePlatformLabel(platform?: string): string {
+    return classifyTelegramPlatform(platform);
+  }
+
+  private logTelegramAuth(
+    action: string,
+    telegramUser: TelegramAuthData,
+    platform: string | undefined,
+    userFound: boolean,
+    databaseTelegramId: string | null,
+  ) {
+    const telegramId = normalizeTelegramId(telegramUser.id);
+    const platformLabel = this.resolvePlatformLabel(platform);
+
+    this.logger.log(`=== TELEGRAM LOGIN ===
+action: ${action}
+platform: ${platformLabel}
+telegram_id: ${telegramId}
+telegram_id_type: ${typeof telegramUser.id}
+username: ${telegramUser.username ?? '—'}
+first_name: ${telegramUser.first_name}
+last_name: ${telegramUser.last_name ?? '—'}
+user_found: ${userFound}
+database_telegram_id: ${databaseTelegramId ?? '—'}
+=====================`);
+
+    this.logger.log(
+      `[telegram-auth] ${action} platform=${platformLabel} telegram_id=${telegramId} username=${telegramUser.username ?? '—'} first_name=${telegramUser.first_name} last_name=${telegramUser.last_name ?? '—'} user_found=${userFound}`,
+    );
+  }
+
+  private async resolveTelegramUser(initData: string, platform?: string) {
+    const telegramUser = this.verifyInitData(initData);
+    const telegramId = normalizeTelegramId(telegramUser.id);
+    const dbUser = await this.usersService.findAnyByTelegramId(telegramId);
+    return {
+      telegramUser,
+      telegramId,
+      dbUser,
+      databaseTelegramId: dbUser ? normalizeTelegramId(dbUser.telegram_id) : null,
+      platform,
+    };
   }
 
   private getAccessExpiresInSeconds(): number {
@@ -165,16 +213,28 @@ export class AuthService {
     return { ok: true };
   }
 
-  async checkUser(initData: string) {
-    const telegramUser = this.verifyInitData(initData);
-    return this.usersService.getTelegramUserStatus(String(telegramUser.id));
+  async checkUser(initData: string, platform?: string) {
+    const { telegramUser, telegramId, dbUser, databaseTelegramId, platform: p } =
+      await this.resolveTelegramUser(initData, platform);
+
+    this.logTelegramAuth(
+      'check-user',
+      telegramUser,
+      p,
+      Boolean(dbUser && !dbUser.is_deleted),
+      databaseTelegramId,
+    );
+
+    return this.usersService.getTelegramUserStatus(telegramId);
   }
 
-  async loginWithInitData(initData: string) {
-    const telegramUser = this.verifyInitData(initData);
-    const telegramId = String(telegramUser.id);
+  async loginWithInitData(initData: string, platform?: string) {
+    const { telegramUser, telegramId, dbUser, databaseTelegramId, platform: p } =
+      await this.resolveTelegramUser(initData, platform);
 
-    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    this.logTelegramAuth('login', telegramUser, p, Boolean(dbUser), databaseTelegramId);
+
+    const anyUser = dbUser;
     if (!anyUser) {
       throw new NotFoundException('Акаунт не знайдено. Створіть новий профіль.');
     }
@@ -191,11 +251,13 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  async registerWithInitData(initData: string) {
-    const telegramUser = this.verifyInitData(initData);
-    const telegramId = String(telegramUser.id);
+  async registerWithInitData(initData: string, platform?: string) {
+    const { telegramUser, telegramId, dbUser, databaseTelegramId, platform: p } =
+      await this.resolveTelegramUser(initData, platform);
 
-    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    this.logTelegramAuth('register', telegramUser, p, Boolean(dbUser), databaseTelegramId);
+
+    const anyUser = dbUser;
     if (anyUser && !anyUser.is_deleted) {
       throw new ConflictException('Акаунт вже існує. Увійдіть у наявний профіль.');
     }
@@ -216,11 +278,13 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  async restoreAccount(initData: string) {
-    const telegramUser = this.verifyInitData(initData);
-    const telegramId = String(telegramUser.id);
+  async restoreAccount(initData: string, platform?: string) {
+    const { telegramUser, telegramId, dbUser, databaseTelegramId, platform: p } =
+      await this.resolveTelegramUser(initData, platform);
 
-    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    this.logTelegramAuth('restore', telegramUser, p, Boolean(dbUser), databaseTelegramId);
+
+    const anyUser = dbUser;
     if (!anyUser?.is_deleted) {
       throw new BadRequestException('Немає видаленого профілю для відновлення');
     }
@@ -234,11 +298,13 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  async recreateAccount(initData: string) {
-    const telegramUser = this.verifyInitData(initData);
-    const telegramId = String(telegramUser.id);
+  async recreateAccount(initData: string, platform?: string) {
+    const { telegramUser, telegramId, dbUser, databaseTelegramId, platform: p } =
+      await this.resolveTelegramUser(initData, platform);
 
-    const anyUser = await this.usersService.findAnyByTelegramId(telegramId);
+    this.logTelegramAuth('recreate', telegramUser, p, Boolean(dbUser), databaseTelegramId);
+
+    const anyUser = dbUser;
     if (anyUser && !anyUser.is_deleted) {
       throw new ConflictException('Акаунт вже існує. Увійдіть у наявний профіль.');
     }
@@ -265,10 +331,11 @@ export class AuthService {
       throw new UnauthorizedException('Dev login is disabled in production');
     }
 
-    let user = await this.usersService.findByTelegramId(telegramId);
+    const normalizedId = normalizeTelegramId(telegramId);
+    let user = await this.usersService.findByTelegramId(normalizedId);
     if (!user) {
       user = await this.usersService.create({
-        telegram_id: telegramId,
+        telegram_id: normalizedId,
         first_name: firstName,
         role: UserRole.EMPLOYEE,
         is_profile_completed: false,

@@ -41,6 +41,11 @@ export function isTelegramEnv() {
   return Boolean(window.Telegram?.WebApp?.initData);
 }
 
+/** Raw Telegram WebApp platform (tdesktop, android, ios, …). */
+export function getTelegramPlatform() {
+  return window.Telegram?.WebApp?.platform ?? 'unknown';
+}
+
 export function closeTelegramApp() {
   window.Telegram?.WebApp?.close();
 }

@@ -14,27 +14,27 @@ export class AuthController {
 
   @Post('check-user')
   checkUser(@Body() dto: LoginDto) {
-    return this.authService.checkUser(dto.initData);
+    return this.authService.checkUser(dto.initData, dto.platform);
   }
 
   @Post('login')
   login(@Body() dto: LoginDto) {
-    return this.authService.loginWithInitData(dto.initData);
+    return this.authService.loginWithInitData(dto.initData, dto.platform);
   }
 
   @Post('register')
   register(@Body() dto: LoginDto) {
-    return this.authService.registerWithInitData(dto.initData);
+    return this.authService.registerWithInitData(dto.initData, dto.platform);
   }
 
   @Post('restore-account')
   restoreAccount(@Body() dto: LoginDto) {
-    return this.authService.restoreAccount(dto.initData);
+    return this.authService.restoreAccount(dto.initData, dto.platform);
   }
 
   @Post('recreate-account')
   recreateAccount(@Body() dto: LoginDto) {
-    return this.authService.recreateAccount(dto.initData);
+    return this.authService.recreateAccount(dto.initData, dto.platform);
   }
 
   @Post('refresh')
