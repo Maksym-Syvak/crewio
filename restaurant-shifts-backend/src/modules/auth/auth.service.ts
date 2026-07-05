@@ -259,10 +259,7 @@ database_telegram_id: ${databaseTelegramId ?? '—'}
 
     const anyUser = dbUser;
     if (anyUser && !anyUser.is_deleted) {
-      this.logger.warn(
-        `register: existing user ${telegramId}, performing login instead`,
-      );
-      return this.loginWithInitData(initData, platform);
+      throw new ConflictException('Акаунт вже існує. Увійдіть у наявний профіль.');
     }
     if (anyUser?.is_deleted) {
       throw new ConflictException('Виявлено раніше видалений профіль');

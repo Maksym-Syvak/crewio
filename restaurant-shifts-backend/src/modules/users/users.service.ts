@@ -29,33 +29,22 @@ export class UsersService {
   ) {}
 
   findByTelegramId(telegramId: string | number) {
-    return this.findAnyByTelegramId(telegramId).then(
-      (user) => (user && !user.is_deleted ? user : null),
-    );
+    const id = normalizeTelegramId(telegramId);
+    return this.usersRepo.findOne({
+      where: { telegram_id: id, is_deleted: false },
+    });
   }
 
   findAnyByTelegramId(telegramId: string | number) {
     const id = normalizeTelegramId(telegramId);
-    return this.findAnyByTelegramIdNormalized(id);
-  }
-
-  private async findAnyByTelegramIdNormalized(id: string) {
-    const byColumn = await this.usersRepo.findOne({
+    return this.usersRepo.findOne({
       where: { telegram_id: id },
       withDeleted: true,
     });
-    if (byColumn) return byColumn;
-
-    return this.usersRepo
-      .createQueryBuilder('user')
-      .where('user.telegram_id::text = :id', { id })
-      .withDeleted()
-      .getOne();
   }
 
   async getTelegramUserStatus(telegramId: string | number) {
-    const id = normalizeTelegramId(telegramId);
-    const user = await this.findAnyByTelegramIdNormalized(id);
+    const user = await this.findAnyByTelegramId(telegramId);
     if (!user) {
       return { exists: false, deleted: false, can_restore: false };
     }
