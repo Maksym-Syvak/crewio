@@ -18,8 +18,9 @@ import { employeesApi } from '@/api/employees.api';
 import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
 import { getErrorMessage, withRetry } from '@/api/client';
-import { withAuthTimeout } from '@/utils/async';
+import { CONTEXT_LOAD_ERROR_MESSAGE, loadWithContextRetry, withAuthTimeout } from '@/utils/async';
 import { beginFreshTelegramAuth } from '@/utils/session';
+import { hasActiveWorkspace, restaurantFromSnapshot } from '@/utils/workspace';
 
 function sessionFromAuth(res: AuthResponse) {
   return {
@@ -42,6 +43,11 @@ interface WorkspaceCache {
   workspaceRole: UserRole | null;
 }
 
+interface RestaurantSnapshot {
+  id: string;
+  name: string;
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -54,6 +60,10 @@ interface AuthState {
   workspaceRole: UserRole | null;
   activeInvitation: InvitationToken | null;
   contextLoaded: boolean;
+  contextLoadError: string | null;
+  contextLoadInProgress: boolean;
+  lastLogin: number | null;
+  restaurantSnapshot: RestaurantSnapshot | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -69,6 +79,7 @@ interface AuthState {
   logout: () => void;
   applyWorkspace: (workspaces: Workspace[], preferredRestaurantId?: string | null) => void;
   loadContext: () => Promise<void>;
+  retryLoadContext: () => Promise<void>;
   refreshContext: () => Promise<void>;
   switchWorkspace: (restaurantId: string) => Promise<void>;
   completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
@@ -91,6 +102,10 @@ export const useAuthStore = create<AuthState>()(
       workspaceRole: null,
       activeInvitation: null,
       contextLoaded: false,
+      contextLoadError: null,
+      contextLoadInProgress: false,
+      lastLogin: null,
+      restaurantSnapshot: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -295,6 +310,10 @@ export const useAuthStore = create<AuthState>()(
           workspaceRole: null,
           activeInvitation: null,
           contextLoaded: false,
+          contextLoadError: null,
+          contextLoadInProgress: false,
+          lastLogin: null,
+          restaurantSnapshot: null,
           isAuthenticated: false,
           error: null,
         });
@@ -319,61 +338,80 @@ export const useAuthStore = create<AuthState>()(
           ? workspaces.find((w) => w.restaurant.id === targetId) ?? null
           : null;
 
+        const restaurant = active?.restaurant ?? null;
+
         set({
           workspaces,
           activeRestaurantId: targetId,
-          restaurant: active?.restaurant ?? null,
+          restaurant,
           employee: active?.employee ?? null,
           workspaceRole: active?.role ?? null,
           contextLoaded: true,
+          contextLoadError: null,
+          lastLogin: restaurant ? Date.now() : get().lastLogin,
+          restaurantSnapshot: restaurant
+            ? { id: restaurant.id, name: restaurant.name }
+            : get().restaurantSnapshot,
         });
       },
 
       loadContext: async () => {
-        const { user, contextLoaded } = get();
-        if (!user || contextLoaded) return;
+        const { user, contextLoaded, contextLoadInProgress } = get();
+        if (!user || contextLoaded || contextLoadInProgress) return;
+
+        const hadCache = hasActiveWorkspace(get().restaurant, get().activeRestaurantId);
+
+        set({ contextLoadInProgress: true, contextLoadError: null });
+
+        if (hadCache) {
+          set({ contextLoaded: true });
+        }
 
         try {
-          const workspaces = await employeesApi.workspaces();
+          const workspaces = await loadWithContextRetry(() => employeesApi.workspaces());
           get().applyWorkspace(workspaces);
 
-          const { restaurant } = get();
-          if (restaurant && (get().workspaceRole === 'owner' || get().workspaceRole === 'admin')) {
-            await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
+          const { restaurant, workspaceRole } = get();
+          if (restaurant && (workspaceRole === 'owner' || workspaceRole === 'admin')) {
+            void restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
           }
-        } catch {
-          set({
-            workspaces: [],
-            restaurant: null,
-            employee: null,
-            workspaceRole: null,
-            contextLoaded: true,
-          });
+        } catch (error) {
+          const message = getErrorMessage(error) || CONTEXT_LOAD_ERROR_MESSAGE;
+          if (hadCache) {
+            set({ contextLoaded: true, contextLoadError: message });
+          } else {
+            set({
+              contextLoaded: true,
+              contextLoadError: message,
+              workspaces: [],
+            });
+          }
+        } finally {
+          set({ contextLoadInProgress: false });
         }
       },
 
+      retryLoadContext: async () => {
+        if (get().contextLoadInProgress) return;
+        set({ contextLoaded: false, contextLoadError: null });
+        await get().loadContext();
+      },
+
       refreshContext: async () => {
-        const { user } = get();
+        const { user, activeRestaurantId: previousId } = get();
         if (!user) return;
 
-        const previousId = get().activeRestaurantId;
-        set({ contextLoaded: false });
-
         try {
-          const workspaces = await employeesApi.workspaces();
+          const workspaces = await loadWithContextRetry(() => employeesApi.workspaces());
           get().applyWorkspace(workspaces, previousId);
 
           const { restaurant, workspaceRole } = get();
           if (restaurant && (workspaceRole === 'owner' || workspaceRole === 'admin')) {
             await restaurantsApi.integrityCheck(restaurant.id).catch(() => undefined);
           }
-        } catch {
+        } catch (error) {
           set({
-            workspaces: [],
-            restaurant: null,
-            employee: null,
-            workspaceRole: null,
-            contextLoaded: true,
+            contextLoadError: getErrorMessage(error) || CONTEXT_LOAD_ERROR_MESSAGE,
           });
         }
       },
@@ -388,6 +426,9 @@ export const useAuthStore = create<AuthState>()(
           employee: ws.employee,
           workspaceRole: ws.role,
           activeInvitation: null,
+          lastLogin: Date.now(),
+          restaurantSnapshot: { id: ws.restaurant.id, name: ws.restaurant.name },
+          contextLoadError: null,
         });
 
         useShiftsStore.setState({ shifts: [] });
@@ -433,6 +474,8 @@ export const useAuthStore = create<AuthState>()(
         user: s.user,
         isAuthenticated: s.isAuthenticated,
         activeRestaurantId: s.activeRestaurantId,
+        lastLogin: s.lastLogin,
+        restaurantSnapshot: s.restaurantSnapshot,
         workspaceCache:
           s.restaurant && s.workspaces.length > 0
             ? {
@@ -452,6 +495,8 @@ export const useAuthStore = create<AuthState>()(
           ...currentState,
           ...authFields,
           contextLoaded: false,
+          contextLoadError: null,
+          contextLoadInProgress: false,
         } as AuthState;
 
         if (
@@ -463,6 +508,13 @@ export const useAuthStore = create<AuthState>()(
           merged.restaurant = workspaceCache.restaurant;
           merged.employee = workspaceCache.employee;
           merged.workspaceRole = workspaceCache.workspaceRole;
+        } else if (
+          authFields.restaurantSnapshot &&
+          authFields.activeRestaurantId &&
+          authFields.restaurantSnapshot.id === authFields.activeRestaurantId
+        ) {
+          merged.restaurant = restaurantFromSnapshot(authFields.restaurantSnapshot);
+          merged.activeRestaurantId = authFields.restaurantSnapshot.id;
         }
 
         return merged;

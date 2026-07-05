@@ -24,23 +24,29 @@ export function WorkspaceSwitcher() {
     return () => document.removeEventListener('click', onClick);
   }, [open]);
 
-  if (!restaurant || workspaces.length === 0) return null;
+  if (!restaurant) return null;
+
+  const canSwitch = workspaces.length > 0;
 
   const canAddRestaurant = workspaceRole === 'owner';
 
   return (
     <div ref={rootRef} className="relative border-b border-[var(--tg-hint)]/15 bg-[var(--tg-bg)] px-4 py-3">
       <p className="text-xs text-[var(--tg-hint)]">Поточний заклад</p>
-      <button
-        type="button"
-        className="mt-0.5 flex w-full items-center justify-between gap-2 text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="truncate font-semibold">{restaurant.name}</span>
-        <span className="text-[var(--tg-hint)]">{open ? '▲' : '▼'}</span>
-      </button>
+      {canSwitch ? (
+        <button
+          type="button"
+          className="mt-0.5 flex w-full items-center justify-between gap-2 text-left"
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="truncate font-semibold">{restaurant.name}</span>
+          <span className="text-[var(--tg-hint)]">{open ? '▲' : '▼'}</span>
+        </button>
+      ) : (
+        <p className="mt-0.5 truncate font-semibold">{restaurant.name}</p>
+      )}
 
-      {open && (
+      {canSwitch && open && (
         <div className="absolute left-4 right-4 top-full z-40 mt-1 overflow-hidden rounded-xl border border-[var(--tg-hint)]/15 bg-[var(--tg-bg)] shadow-lg">
           <ul className="max-h-64 overflow-y-auto py-1">
             {workspaces.map((ws) => {

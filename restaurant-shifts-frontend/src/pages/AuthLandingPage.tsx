@@ -6,6 +6,8 @@ import { isTelegramEnv } from '@/services/telegram';
 import { getPostLoginPath } from '@/store/onboarding';
 import { RestoreAccountModal } from '@/components/RestoreAccountModal';
 import { CreateNewAccountModal } from '@/components/CreateNewAccountModal';
+import { ConnectionErrorScreen } from '@/components/ConnectionErrorScreen';
+import { hasActiveWorkspace } from '@/utils/workspace';
 import {
   beginFreshTelegramAuth,
   isAwaitingTelegramSwitch,
@@ -22,6 +24,11 @@ export default function AuthLandingPage() {
   const error = useAuthStore((s) => s.error);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const contextLoaded = useAuthStore((s) => s.contextLoaded);
+  const contextLoadError = useAuthStore((s) => s.contextLoadError);
+  const contextLoadInProgress = useAuthStore((s) => s.contextLoadInProgress);
+  const retryLoadContext = useAuthStore((s) => s.retryLoadContext);
+  const restaurant = useAuthStore((s) => s.restaurant);
+  const activeRestaurantId = useAuthStore((s) => s.activeRestaurantId);
   const resetOnboarding = useOnboardingStore((s) => s.reset);
 
   const [devId, setDevId] = useState('000000001');
@@ -36,11 +43,14 @@ export default function AuthLandingPage() {
     }
   }, [navigate]);
 
+  const canEnterApp =
+    contextLoaded || hasActiveWorkspace(restaurant, activeRestaurantId);
+
   useEffect(() => {
-    if (isAuthenticated && contextLoaded) {
+    if (isAuthenticated && canEnterApp) {
       navigate(getPostLoginPath(), { replace: true });
     }
-  }, [isAuthenticated, contextLoaded, navigate]);
+  }, [isAuthenticated, canEnterApp, navigate]);
 
   useEffect(() => {
     if (
@@ -139,7 +149,14 @@ export default function AuthLandingPage() {
     isLoading;
 
   const showRestoringSession =
-    isAuthenticated && !contextLoaded && !skipAutoAuth;
+    isAuthenticated && !canEnterApp && !skipAutoAuth;
+
+  const showConnectionError =
+    isAuthenticated &&
+    contextLoaded &&
+    contextLoadError &&
+    !hasActiveWorkspace(restaurant, activeRestaurantId) &&
+    !skipAutoAuth;
 
   const showManualLogin =
     isTelegramEnv() &&
@@ -175,6 +192,13 @@ export default function AuthLandingPage() {
           <div className="spinner" />
           <p className="text-sm text-[var(--tg-hint)]">Завантаження...</p>
         </div>
+      )}
+
+      {showConnectionError && (
+        <ConnectionErrorScreen
+          onRetry={() => void retryLoadContext()}
+          retrying={contextLoadInProgress}
+        />
       )}
 
       {error && !isLoading && (
