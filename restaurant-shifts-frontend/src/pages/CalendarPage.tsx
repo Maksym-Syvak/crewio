@@ -19,6 +19,8 @@ import {
   isShiftUrgent,
 } from '@/utils/shifts';
 
+type DayVariant = 'mine' | 'minePartial' | 'available' | 'urgent' | 'dayoff';
+
 export default function CalendarPage() {
   const employee = useAuthStore((s) => s.employee);
   const restaurant = useAuthStore((s) => s.restaurant);
@@ -102,11 +104,10 @@ export default function CalendarPage() {
     return 'dayoff';
   };
 
-  const dotColor = {
+  const dotColor: Record<Exclude<DayVariant, 'urgent'>, string> = {
     mine: 'bg-[var(--crew-green)]',
     minePartial: 'bg-[var(--crew-amber)]',
-    available: 'bg-[var(--crew-blue)]',
-    urgent: 'bg-[var(--crew-red)]',
+    available: 'bg-[var(--crew-burgundy-light)]',
     dayoff: 'bg-[var(--crew-gray)]',
   };
 
@@ -170,19 +171,17 @@ export default function CalendarPage() {
               onClick={() => setSelectedDay(key)}
             >
               {d.date()}
-              {shiftsOnDay.length > 0 && (
-                <span className={cn('mt-0.5 h-1.5 w-1.5 rounded-full', dotColor[variant])} />
-              )}
+              {shiftsOnDay.length > 0 && <DayStatusIndicator variant={variant} dotColor={dotColor} />}
             </button>
           );
         })}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs">
-        <Legend color={dotColor.mine} label={legend.full} />
-        <Legend color={dotColor.minePartial} label={legend.partial} />
-        <Legend color={dotColor.available} label={legend.open} />
-        <Legend color={dotColor.urgent} label="Термінова" />
+        <Legend variant="mine" color={dotColor.mine} label={legend.full} />
+        <Legend variant="minePartial" color={dotColor.minePartial} label={legend.partial} />
+        <Legend variant="available" color={dotColor.available} label={legend.open} />
+        <Legend variant="urgent" label="Термінова" />
       </div>
 
       {selectedDay && (
@@ -271,10 +270,43 @@ export default function CalendarPage() {
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function DayStatusIndicator({
+  variant,
+  dotColor,
+}: {
+  variant: DayVariant;
+  dotColor: Record<Exclude<DayVariant, 'urgent'>, string>;
+}) {
+  if (variant === 'urgent') {
+    return (
+      <span
+        className="mt-0.5 text-[11px] font-extrabold leading-none text-[var(--crew-red)]"
+        aria-label="Терміново"
+      >
+        !
+      </span>
+    );
+  }
+
+  return <span className={cn('mt-0.5 h-1.5 w-1.5 rounded-full', dotColor[variant])} />;
+}
+
+function Legend({
+  variant,
+  color,
+  label,
+}: {
+  variant: DayVariant;
+  color?: string;
+  label: string;
+}) {
   return (
     <span className="flex items-center gap-1">
-      <span className={cn('h-2 w-2 rounded-full', color)} />
+      {variant === 'urgent' ? (
+        <span className="text-[11px] font-extrabold leading-none text-[var(--crew-red)]">!</span>
+      ) : (
+        <span className={cn('h-2 w-2 rounded-full', color)} />
+      )}
       {label}
     </span>
   );
