@@ -5,7 +5,6 @@ import { ShiftModal } from '@/components/ShiftModal';
 import { dayjs } from '@/utils/dates';
 import type { Shift, ShiftBooking } from '@/types';
 import { cn } from '@/utils/cn';
-import { UrgentTriangleMarker } from '@/components/UrgentTriangleMarker';
 import { isAdminRole } from '@/utils/roles';
 import {
   getAdminStaffingStatus,
@@ -84,10 +83,9 @@ export default function CalendarPage() {
     const shiftsOnDay = shiftsByDay.get(key) ?? [];
     if (!shiftsOnDay.length) return 'dayoff';
 
-    if (shiftsOnDay.some((s) => isShiftUrgent(s))) return 'urgent';
-
     if (isAdmin) {
       const statuses = shiftsOnDay.map(getAdminStaffingStatus);
+      if (statuses.some((s) => s === 'urgent')) return 'urgent';
       if (statuses.some((s) => s === 'partial')) return 'minePartial';
       if (statuses.some((s) => s === 'full')) return 'mine';
       if (statuses.some((s) => s === 'unbooked')) return 'available';
@@ -101,6 +99,7 @@ export default function CalendarPage() {
       }
     }
 
+    if (shiftsOnDay.some((s) => isShiftUrgent(s))) return 'urgent';
     if (shiftsOnDay.some((s) => getAvailableSlots(s) > 0)) return 'available';
     return 'dayoff';
   };
@@ -280,8 +279,11 @@ function DayStatusIndicator({
 }) {
   if (variant === 'urgent') {
     return (
-      <span aria-label="Терміново">
-        <UrgentTriangleMarker size="sm" />
+      <span
+        className="mt-0.5 text-[11px] font-extrabold leading-none text-[var(--crew-red)]"
+        aria-label="Терміново"
+      >
+        !
       </span>
     );
   }
@@ -301,7 +303,7 @@ function Legend({
   return (
     <span className="flex items-center gap-1">
       {variant === 'urgent' ? (
-        <UrgentTriangleMarker size="md" />
+        <span className="text-[11px] font-extrabold leading-none text-[var(--crew-red)]">!</span>
       ) : (
         <span className={cn('h-2 w-2 rounded-full', color)} />
       )}
