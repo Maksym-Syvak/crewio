@@ -6,7 +6,6 @@ import { RouteGuard } from '@/components/RouteGuard';
 import { OnboardingGuard, OnboardingOnlyGuard } from '@/components/OnboardingGuard';
 import { WorkspaceReadyGuard } from '@/components/WorkspaceReadyGuard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { TelegramSessionGate } from '@/components/TelegramSessionGate';
 import { PageSkeleton } from '@/components/Skeleton';
 import { setupApiInterceptors } from '@/api/client';
 import { useAuthStore, useAppStore } from '@/store';
@@ -197,9 +196,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <TelegramSessionGate>
-          <AppBootstrap />
-        </TelegramSessionGate>
+        <AppBootstrap />
       </BrowserRouter>
     </ErrorBoundary>
   );

@@ -19,12 +19,10 @@ import { shiftsApi } from '@/api/shifts.api';
 import { notificationsApi } from '@/api/notifications.api';
 import { getErrorMessage, isConflictError, isNotFoundError, withRetry } from '@/api/client';
 import { CONTEXT_LOAD_ERROR_MESSAGE, loadWithContextRetry, withAuthTimeout } from '@/utils/async';
-import { beginFreshTelegramAuth, isAwaitingTelegramSwitch, shouldSkipAutoAuth } from '@/utils/session';
+import { beginFreshTelegramAuth } from '@/utils/session';
 import { hasActiveWorkspace, restaurantFromSnapshot } from '@/utils/workspace';
 import {
   getTelegramUserIdFromClient,
-  isTelegramEnv,
-  telegramIdsMatch,
   waitForTelegramInitData,
 } from '@/services/telegram';
 
@@ -73,8 +71,6 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  telegramSessionChecked: boolean;
-  pendingAccountRestore: boolean;
   setSession: (res: AuthResponse) => void;
   refreshAccessToken: () => Promise<string>;
   login: () => Promise<void>;
@@ -83,8 +79,6 @@ interface AuthState {
   recreateAccount: () => Promise<void>;
   checkUser: () => Promise<CheckUserResponse>;
   telegramAutoAuth: () => Promise<'restore' | 'ok'>;
-  reconcileTelegramSession: () => Promise<'restore' | 'ok' | 'skipped'>;
-  clearPendingAccountRestore: () => void;
   devLogin: (telegramId: string) => Promise<void>;
   logout: () => void;
   applyWorkspace: (workspaces: Workspace[], preferredRestaurantId?: string | null) => void;
@@ -111,8 +105,6 @@ async function finishAuthSession(
   await loadContext().catch(() => undefined);
 }
 
-let reconcileInFlight: Promise<'restore' | 'ok' | 'skipped'> | null = null;
-
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -134,8 +126,6 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
-      telegramSessionChecked: false,
-      pendingAccountRestore: false,
 
       setSession: (res) => set(sessionFromAuth(res)),
 
@@ -246,7 +236,7 @@ export const useAuthStore = create<AuthState>()(
           if (
             persistedUser?.telegram_id &&
             clientTelegramId &&
-            !telegramIdsMatch(persistedUser.telegram_id, clientTelegramId)
+            persistedUser.telegram_id !== clientTelegramId
           ) {
             get().logout();
           }
@@ -302,87 +292,6 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: false });
         }
       },
-
-      reconcileTelegramSession: async () => {
-        if (get().telegramSessionChecked) {
-          return 'skipped';
-        }
-        if (reconcileInFlight) {
-          return reconcileInFlight;
-        }
-
-        reconcileInFlight = (async (): Promise<'restore' | 'ok' | 'skipped'> => {
-          if (
-            !isTelegramEnv() ||
-            shouldSkipAutoAuth() ||
-            isAwaitingTelegramSwitch()
-          ) {
-            set({ telegramSessionChecked: true });
-            return 'skipped';
-          }
-
-          set({ isLoading: true, error: null, pendingAccountRestore: false });
-          try {
-            const initData = await waitForTelegramInitData();
-            const clientTelegramId = getTelegramUserIdFromClient();
-            const { user, isAuthenticated } = get();
-
-            if (
-              isAuthenticated &&
-              user?.telegram_id &&
-              clientTelegramId &&
-              !telegramIdsMatch(user.telegram_id, clientTelegramId)
-            ) {
-              get().logout();
-              return get().telegramAutoAuth();
-            }
-
-            if (!isAuthenticated) {
-              return get().telegramAutoAuth();
-            }
-
-            const status = await authApi.checkUser(initData);
-            if (status.deleted && status.can_restore) {
-              set({ pendingAccountRestore: true });
-              return 'restore';
-            }
-
-            beginFreshTelegramAuth();
-            try {
-              const res = await withAuthTimeout(withRetry(() => authApi.login(initData)));
-              await finishAuthSession(res, set, () => get().loadContext());
-            } catch (e) {
-              if (isNotFoundError(e)) {
-                get().logout();
-                return get().telegramAutoAuth();
-              }
-              throw e;
-            }
-
-            return 'ok';
-          } catch (e) {
-            set({
-              error: getErrorMessage(e),
-              isAuthenticated: false,
-              token: null,
-              refreshToken: null,
-              tokenExpiresAt: null,
-              user: null,
-            });
-            throw e;
-          } finally {
-            set({ isLoading: false, telegramSessionChecked: true });
-          }
-        })();
-
-        try {
-          return await reconcileInFlight;
-        } finally {
-          reconcileInFlight = null;
-        }
-      },
-
-      clearPendingAccountRestore: () => set({ pendingAccountRestore: false }),
 
       devLogin: async (telegramId: string) => {
         set({ isLoading: true, error: null });
