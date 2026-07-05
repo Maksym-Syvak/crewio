@@ -21,7 +21,7 @@
 
   --crew-green: #2d6a4f;
   --crew-amber: #c17817;
-  --crew-blue: var(--crew-burgundy-light);
+  --crew-blue: #2563eb;
   --crew-red: var(--crew-crimson);
   --crew-gray: #b8a0a8;
   --crew-accent: var(--crew-rose);
@@ -37,6 +37,7 @@
   --crew-wine-muted: #b8909c;
   --tg-link: #e85d7a;
   --tg-button: #a91d47;
+  --crew-blue: #60a5fa;
 }
 
 * {
