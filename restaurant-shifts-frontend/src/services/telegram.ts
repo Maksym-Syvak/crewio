@@ -77,6 +77,14 @@ export function getTelegramUserIdFromClient(): string | null {
   return id != null ? String(id).trim() : null;
 }
 
+export function telegramIdsMatch(
+  persistedId: string | undefined | null,
+  clientId: string | null,
+): boolean {
+  if (!persistedId || !clientId) return true;
+  return String(persistedId).trim() === String(clientId).trim();
+}
+
 export function closeTelegramApp() {
   window.Telegram?.WebApp?.close();
 }

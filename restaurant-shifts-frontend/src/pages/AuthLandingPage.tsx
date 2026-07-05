@@ -30,12 +30,21 @@ export default function AuthLandingPage() {
   const restaurant = useAuthStore((s) => s.restaurant);
   const activeRestaurantId = useAuthStore((s) => s.activeRestaurantId);
   const resetOnboarding = useOnboardingStore((s) => s.reset);
+  const pendingAccountRestore = useAuthStore((s) => s.pendingAccountRestore);
+  const clearPendingAccountRestore = useAuthStore((s) => s.clearPendingAccountRestore);
+  const telegramSessionChecked = useAuthStore((s) => s.telegramSessionChecked);
 
   const [devId, setDevId] = useState('000000001');
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [createNewOpen, setCreateNewOpen] = useState(false);
-  const [autoAuthStarted, setAutoAuthStarted] = useState(false);
   const skipAutoAuth = shouldSkipAutoAuth();
+
+  useEffect(() => {
+    if (pendingAccountRestore) {
+      setRestoreOpen(true);
+      clearPendingAccountRestore();
+    }
+  }, [clearPendingAccountRestore, pendingAccountRestore]);
 
   useEffect(() => {
     if (isAwaitingTelegramSwitch()) {
@@ -52,54 +61,11 @@ export default function AuthLandingPage() {
     }
   }, [isAuthenticated, canEnterApp, navigate]);
 
-  useEffect(() => {
-    if (
-      !isTelegramEnv() ||
-      isAuthenticated ||
-      autoAuthStarted ||
-      skipAutoAuth ||
-      isAwaitingTelegramSwitch()
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-    setAutoAuthStarted(true);
-
-    (async () => {
-      try {
-        const result = await telegramAutoAuth();
-        if (cancelled) return;
-
-        if (result === 'restore') {
-          setRestoreOpen(true);
-          return;
-        }
-
-        navigate(getPostLoginPath(), { replace: true });
-      } catch {
-        // error is stored in auth store
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    autoAuthStarted,
-    isAuthenticated,
-    navigate,
-    resetOnboarding,
-    skipAutoAuth,
-    telegramAutoAuth,
-  ]);
-
   const afterLogin = () => {
     navigate(getPostLoginPath(), { replace: true });
   };
 
   const handleManualLogin = async () => {
-    setAutoAuthStarted(true);
     beginFreshTelegramAuth();
     try {
       const result = await telegramAutoAuth();
@@ -146,7 +112,7 @@ export default function AuthLandingPage() {
     !isAuthenticated &&
     !skipAutoAuth &&
     !isAwaitingTelegramSwitch() &&
-    isLoading;
+    (!telegramSessionChecked || isLoading);
 
   const showRestoringSession =
     isAuthenticated && !canEnterApp && !skipAutoAuth;
