@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ShiftsService } from './shifts.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { GenerateScheduleDto } from './dto/generate-schedule.dto';
 import { BookShiftDto, CannotMakeShiftDto } from './dto/book-shift.dto';
+import { SetShiftUrgentDto } from './dto/set-shift-urgent.dto';
 import { ShiftStatus } from './entities/shift.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -47,6 +48,15 @@ export class ShiftsController {
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: UpdateShiftDto) {
     return this.shiftsService.update(id, dto);
+  }
+
+  @Patch(':id/urgent')
+  setUrgent(
+    @Param('id') id: string,
+    @Body() dto: SetShiftUrgentDto,
+    @Req() req: { user: { sub: string } },
+  ) {
+    return this.shiftsService.setManualUrgent(id, dto.urgent, req.user.sub);
   }
 
   @Roles('owner', 'admin')

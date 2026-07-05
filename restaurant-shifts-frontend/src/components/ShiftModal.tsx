@@ -15,6 +15,7 @@ import {
   ShiftBookingStatus,
   ShiftSlotsInfo,
 } from '@/components/ShiftBookingForm';
+import { UrgentShiftToggle } from '@/components/UrgentShiftToggle';
 
 interface Props {
   shift: Shift;
@@ -96,6 +97,13 @@ export function ShiftModal({ shift: initialShift, onClose, onUpdated }: Props) {
             onUpdated={handleShiftUpdated}
             onError={(msg) => push({ type: 'error', title: msg })}
           />
+          {isAdmin && shift.status !== 'completed' && shift.status !== 'active' && (
+            <UrgentShiftToggle
+              shift={shift}
+              onUpdated={handleShiftUpdated}
+              onError={(msg) => push({ type: 'error', title: msg })}
+            />
+          )}
         </dl>
 
         <div className="mt-4 space-y-3">

@@ -59,6 +59,8 @@ export class ShiftsService {
     if (shift.status === ShiftStatus.COMPLETED) return ShiftStatus.COMPLETED;
     if (shift.status === ShiftStatus.ACTIVE) return ShiftStatus.ACTIVE;
 
+    if (shift.is_manually_urgent) return ShiftStatus.URGENT;
+
     const hoursUntil = this.hoursUntilStart(shift, now);
     if (hoursUntil < URGENT_HOURS_BEFORE && booked < shift.required_employees) {
       return ShiftStatus.URGENT;
@@ -71,6 +73,9 @@ export class ShiftsService {
   syncShiftStatus(shift: Shift, booked: number, now = new Date()) {
     shift.booked_employees = booked;
     if ([ShiftStatus.CANCELLED, ShiftStatus.COMPLETED, ShiftStatus.ACTIVE].includes(shift.status)) {
+      if (shift.status === ShiftStatus.ACTIVE) {
+        shift.is_manually_urgent = false;
+      }
       shift.is_urgent = shift.status === ShiftStatus.URGENT;
       return shift;
     }
@@ -162,6 +167,7 @@ export class ShiftsService {
       ...payment,
       status: ShiftStatus.OPEN,
       is_urgent: false,
+      is_manually_urgent: false,
       urgent_notified_at: [],
     });
     this.syncShiftStatus(shift, 0);
@@ -242,6 +248,7 @@ export class ShiftsService {
     for (const shift of shifts) {
       shift.status = ShiftStatus.ACTIVE;
       shift.is_urgent = false;
+      shift.is_manually_urgent = false;
       await this.shiftsRepo.save(shift);
       this.events.emit('shift.started', shift);
     }
@@ -267,6 +274,7 @@ export class ShiftsService {
 
     shift.status = ShiftStatus.COMPLETED;
     shift.is_urgent = false;
+    shift.is_manually_urgent = false;
     await this.shiftsRepo.save(shift);
 
     const bookings =
@@ -328,6 +336,7 @@ export class ShiftsService {
     let sent = 0;
     for (const shift of shifts) {
       if (new Date(shift.start_time) <= now) continue;
+      if (shift.is_manually_urgent) continue;
       if (!this.isUnderstaffed(shift)) continue;
 
       const hoursLeft = this.hoursUntilStart(shift, now);
@@ -379,6 +388,32 @@ export class ShiftsService {
     await this.shiftsRepo.save(updated);
 
     this.events.emit('shift.updated', updated);
+    return updated;
+  }
+
+  async setManualUrgent(id: string, urgent: boolean, userId: string) {
+    const shift = await this.findOne(id);
+    await this.employeesService.assertCanManageRestaurant(userId, shift.restaurant_id);
+
+    if ([ShiftStatus.COMPLETED, ShiftStatus.CANCELLED, ShiftStatus.ACTIVE].includes(shift.status)) {
+      throw new BadRequestException('Зміну вже не можна позначити терміновою');
+    }
+
+    const wasUrgent = shift.status === ShiftStatus.URGENT;
+
+    shift.is_manually_urgent = urgent;
+    const booked = this.activeBookingsCount(shift);
+    this.syncShiftStatus(shift, booked);
+    await this.shiftsRepo.save(shift);
+
+    const updated = await this.findOne(id);
+
+    if (urgent && !wasUrgent) {
+      this.events.emit('shift.emergency', updated);
+    } else {
+      this.events.emit('shift.updated', updated);
+    }
+
     return updated;
   }
 

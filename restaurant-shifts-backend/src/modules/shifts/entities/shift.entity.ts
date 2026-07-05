@@ -82,6 +82,10 @@ export class Shift {
   @Column({ default: false })
   is_urgent: boolean;
 
+  /** Owner/admin pinned urgent — not cleared by automatic fill rules */
+  @Column({ default: false })
+  is_manually_urgent: boolean;
+
   /** Hours-before-start thresholds for which urgent reminders were sent (24, 12, 6, 2) */
   @Column({ type: 'jsonb', nullable: true, default: () => "'[]'" })
   urgent_notified_at: number[];

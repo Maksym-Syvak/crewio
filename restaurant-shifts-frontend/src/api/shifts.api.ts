@@ -45,6 +45,9 @@ export const shiftsApi = {
     api
       .post(`/shifts/${id}/cannot-make-it`, { employee_id })
       .then((r) => r.data),
+
+  setUrgent: (id: string, urgent: boolean) =>
+    api.patch<Shift>(`/shifts/${id}/urgent`, { urgent }).then((r) => r.data),
 };
 
 export type ScheduleMode = 'weekly' | 'rotation' | 'custom_cycle';

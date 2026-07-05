@@ -12,7 +12,7 @@ import { CreateNotificationDto } from './dto/create-notification.dto';
 import { TelegramService } from '../telegram/telegram.service';
 import { UsersService } from '../users/users.service';
 import { EmployeesService } from '../employees/employees.service';
-import { formatDateShort, formatDateUk, formatTimeHm } from '../shifts/utils/date-format';
+import { formatDateUk, formatTimeHm } from '../shifts/utils/date-format';
 import { getAvailableSlots } from '../shifts/utils/shift-helpers';
 
 export interface ScheduleGeneratedPayload {
@@ -98,7 +98,7 @@ export class NotificationsService {
         inline_keyboard: [
           [
             {
-              text: 'Переглянути',
+              text: 'Переглянути зміну',
               web_app: { url: `${frontendUrl}/shifts/${dto.related_shift_id}` },
             },
           ],
@@ -133,10 +133,10 @@ export class NotificationsService {
       shift.restaurant?.name ?? '—',
       '',
       'Дата:',
-      formatDateShort(shift.start_time),
+      formatDateUk(shift.start_time),
       '',
       'Час:',
-      `${formatTimeHm(shift.start_time)}-${formatTimeHm(shift.end_time)}`,
+      `${formatTimeHm(shift.start_time)}–${formatTimeHm(shift.end_time)}`,
       '',
       'Вільних місць:',
       String(available),
@@ -188,10 +188,10 @@ export class NotificationsService {
 
     await this.notifyRestaurantEmployees(shift.restaurant_id, () => ({
       type: NotificationType.URGENT_REPLACEMENT,
-      title: '🚨 Потрібно закрити зміну',
+      title: 'Термінова зміна',
       body,
       related_shift_id: shift.id,
-      metadata: { action: 'book_shift', shift_id: shift.id },
+      metadata: { action: 'view_shift', shift_id: shift.id },
     }));
   }
 

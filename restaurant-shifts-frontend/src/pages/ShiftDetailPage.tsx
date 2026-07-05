@@ -8,6 +8,7 @@ import {
   ShiftBookingStatus,
   ShiftSlotsInfo,
 } from '@/components/ShiftBookingForm';
+import { UrgentShiftToggle } from '@/components/UrgentShiftToggle';
 import { useAuthStore, useShiftsStore, useToastStore } from '@/store';
 import { formatDate, formatTime } from '@/utils/dates';
 import { getErrorMessage } from '@/api/client';
@@ -113,7 +114,19 @@ export default function ShiftDetailPage() {
   const handleShiftUpdated = (updated: Shift) => {
     setShift(updated);
     upsertShift(updated);
+  };
+
+  const handleSlotsUpdated = (updated: Shift) => {
+    handleShiftUpdated(updated);
     push({ type: 'success', title: 'Кількість працівників оновлено' });
+  };
+
+  const handleUrgentUpdated = (updated: Shift) => {
+    handleShiftUpdated(updated);
+    push({
+      type: updated.is_manually_urgent ? 'urgent' : 'success',
+      title: updated.is_manually_urgent ? 'Зміну позначено терміновою' : 'Статус термінової знято',
+    });
   };
 
   if (loading) return <PageSkeleton />;
@@ -157,9 +170,17 @@ export default function ShiftDetailPage() {
           shift={shift}
           editable={isAdmin}
           showBookingBreakdown={isAdmin}
-          onUpdated={handleShiftUpdated}
+          onUpdated={handleSlotsUpdated}
           onError={(msg) => push({ type: 'error', title: msg })}
         />
+        {isAdmin && !isCompleted && shift.status !== 'active' && (
+          <UrgentShiftToggle
+            shift={shift}
+            disabled={acting}
+            onUpdated={handleUrgentUpdated}
+            onError={(msg) => push({ type: 'error', title: msg })}
+          />
+        )}
         {isCompleted && myBooking && calculateBookingPayPreview(shift, myBooking) && (
           <Row label="Нараховано" value={calculateBookingPayPreview(shift, myBooking)!} />
         )}

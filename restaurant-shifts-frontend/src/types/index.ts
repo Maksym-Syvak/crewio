@@ -192,6 +192,7 @@ export interface Shift {
   fixed_rate?: number | null;
   status: ShiftStatus;
   is_urgent: boolean;
+  is_manually_urgent?: boolean;
   created_at: string;
   position_id?: string | null;
   position?: Position;
