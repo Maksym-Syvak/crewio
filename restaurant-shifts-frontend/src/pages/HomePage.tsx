@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore, useNotificationsStore, useShiftsStore } from '@/store';
 import { ShiftCard } from '@/components/ShiftCard';
 import { PageSkeleton } from '@/components/Skeleton';
-import { dayjs } from '@/utils/dates';
-import { isEmployeeBooked, isShiftFull } from '@/utils/shifts';
+import { dayjs, formatTime } from '@/utils/dates';
+import { isEmployeeBooked } from '@/utils/shifts';
+import type { Notification, Shift } from '@/types';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -41,25 +42,7 @@ export default function HomePage() {
     [myShifts, now],
   );
 
-  const available = useMemo(
-    () =>
-      shifts.filter(
-        (s) =>
-          !isEmployeeBooked(s, employee?.id) &&
-          !isShiftFull(s) &&
-          s.status !== 'cancelled',
-      ),
-    [shifts, employee],
-  );
-
-  const urgent = useMemo(
-    () => shifts.filter((s) => s.is_urgent || s.status === 'urgent'),
-    [shifts],
-  );
-
-  const monthShifts = myShifts.filter((s) =>
-    dayjs(s.start_time).isSame(now, 'month'),
-  ).length;
+  const latestNotification = notifications[0] ?? null;
 
   if (isLoading && !shifts.length && restaurant) return <PageSkeleton />;
 
@@ -101,70 +84,91 @@ export default function HomePage() {
         Привіт, {user?.first_name ?? 'користувач'} 👋
       </h1>
 
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        <StatCard label="Змін за місяць" value={String(monthShifts)} />
-        <StatCard label="Доступно" value={String(available.length)} />
-      </div>
-
       {workspaceRole === 'employee' && !employee && restaurant && (
         <div className="card mb-5 text-sm text-[var(--tg-hint)]">
           Ви переглядаєте заклад без активного профілю працівника.
         </div>
       )}
 
-      <Section title="Наступна зміна">
+      <Section title="Наступні зміни">
         {nextShift ? (
           <ShiftCard shift={nextShift} variant="mine" />
         ) : (
           <Empty text="Немає запланованих змін" />
         )}
-      </Section>
-
-      {urgent.length > 0 && (
-        <Section title="Термінові заміни">
-          {urgent.slice(0, 3).map((s) => (
-            <div key={s.id} className="mb-2">
-              <ShiftCard shift={s} variant="urgent" />
-            </div>
-          ))}
-          <Link to="/emergency" className="text-sm text-[var(--tg-link)]">
-            Переглянути всі →
-          </Link>
-        </Section>
-      )}
-
-      <Section title="Доступні зміни">
-        {available.slice(0, 3).map((s) => (
-          <div key={s.id} className="mb-2">
-            <ShiftCard shift={s} variant="available" />
-          </div>
-        ))}
-        {available.length === 0 && <Empty text="Немає доступних змін" />}
-        <Link to="/shifts" className="mt-2 inline-block text-sm text-[var(--tg-link)]">
+        <Link to="/calendar" className="mt-2 inline-block text-sm text-[var(--tg-link)]">
           Всі зміни →
         </Link>
       </Section>
 
-      <Section title="Останні сповіщення">
-        {notifications.slice(0, 3).map((n) => (
-          <div key={n.id} className="card mb-2 text-sm">
-            <div className="font-medium">{n.title}</div>
-            <div className="text-[var(--tg-hint)]">{n.body}</div>
-          </div>
-        ))}
-        {notifications.length === 0 && <Empty text="Немає сповіщень" />}
+      <Section title="Останнє сповіщення">
+        {latestNotification ? (
+          <>
+            <LatestNotificationCard notification={latestNotification} shifts={shifts} />
+            <Link to="/notifications" className="mt-2 inline-block text-sm text-[var(--tg-link)]">
+              Всі сповіщення →
+            </Link>
+          </>
+        ) : (
+          <>
+            <Empty text="Нових сповіщень немає" />
+            <Link to="/notifications" className="mt-2 inline-block text-sm text-[var(--tg-link)]">
+              Всі сповіщення →
+            </Link>
+          </>
+        )}
       </Section>
     </div>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="card text-center">
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="mt-1 text-xs text-[var(--tg-hint)]">{label}</div>
+function LatestNotificationCard({
+  notification,
+  shifts,
+}: {
+  notification: Notification;
+  shifts: Shift[];
+}) {
+  const subtitle = getNotificationSubtitle(notification, shifts);
+  const shiftId = notification.related_shift_id;
+
+  const content = (
+    <div className="card text-sm">
+      <div className="font-medium">{notification.title}</div>
+      {subtitle && <div className="mt-1 text-[var(--tg-hint)]">{subtitle}</div>}
     </div>
   );
+
+  if (shiftId) {
+    return (
+      <Link to={`/shifts/${shiftId}`} className="block active:opacity-80">
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
+}
+
+function getNotificationSubtitle(notification: Notification, shifts: Shift[]): string | null {
+  const shift = notification.related_shift_id
+    ? shifts.find((s) => s.id === notification.related_shift_id)
+    : undefined;
+
+  if (shift) {
+    return `${dayjs(shift.start_time).format('DD.MM')} • ${formatTime(shift.start_time)}–${formatTime(shift.end_time)}`;
+  }
+
+  const lines = notification.body.split('\n').map((l) => l.trim()).filter(Boolean);
+  const dateIdx = lines.indexOf('Дата:');
+  const timeIdx = lines.indexOf('Час:');
+  if (dateIdx >= 0 && timeIdx >= 0) {
+    const date = lines[dateIdx + 1];
+    const time = lines[timeIdx + 1]?.replace('-', '–');
+    if (date && time) return `${date} • ${time}`;
+  }
+
+  return dayjs(notification.created_at).format('DD.MM, HH:mm');
 }
 
 function Section({
