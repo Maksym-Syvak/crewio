@@ -12,20 +12,19 @@ export const SESSION_FLAGS = {
 export async function clearAppSession() {
   disconnectSocket();
 
-  try {
-    const refreshToken = useAuthStore.getState().refreshToken ?? undefined;
-    await authApi.logout(refreshToken);
-  } catch {
-    // JWT is stateless — local cleanup still proceeds
-  }
-
+  const refreshToken = useAuthStore.getState().refreshToken ?? undefined;
   useAuthStore.getState().logout();
   useOnboardingStore.getState().reset();
-
+  sessionStorage.clear();
   await useAuthStore.persist.clearStorage();
   await useOnboardingStore.persist.clearStorage();
 
-  sessionStorage.clear();
+  // The saved session belongs to the wiped database, so logout must not wait
+  // on a refresh that can never succeed.
+  void Promise.race([
+    authApi.logout(refreshToken),
+    new Promise((resolve) => setTimeout(resolve, 2500)),
+  ]).catch(() => undefined);
 }
 
 /** Log out of Crewio and return to the start screen without auto-login. */

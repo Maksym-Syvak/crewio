@@ -36,6 +36,7 @@ function isAuthEndpoint(url?: string) {
     url.includes('/auth/login') ||
     url.includes('/auth/register') ||
     url.includes('/auth/refresh') ||
+    url.includes('/auth/logout') ||
     url.includes('/auth/check-user') ||
     url.includes('/auth/dev-login')
   );
@@ -70,9 +71,15 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     try {
       if (!isRefreshing) {
         isRefreshing = true;
-        const newToken = await refreshSession();
-        processRefreshQueue(null, newToken);
-        isRefreshing = false;
+        try {
+          const newToken = await refreshSession();
+          processRefreshQueue(null, newToken);
+        } catch (refreshError) {
+          processRefreshQueue(refreshError, null);
+          throw refreshError;
+        } finally {
+          isRefreshing = false;
+        }
       } else {
         await new Promise<string>((resolve, reject) => {
           refreshQueue.push({ resolve, reject });
