@@ -63,15 +63,15 @@ export default function CreateShiftPage() {
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
-  const [requiredEmployees, setRequiredEmployees] = useState(3);
+  const [requiredEmployees, setRequiredEmployees] = useState('');
   const [shiftType, setShiftType] = useState('');
   const [paymentType, setPaymentType] = useState<PaymentType>('shift');
   const [shiftRate, setShiftRate] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
   const [fixedRate, setFixedRate] = useState('');
   const [rotationPreset, setRotationPreset] = useState<RotationPreset>('5_2');
-  const [workDays, setWorkDays] = useState(5);
-  const [restDays, setRestDays] = useState(2);
+  const [workDays, setWorkDays] = useState('5');
+  const [restDays, setRestDays] = useState('2');
   const [generating, setGenerating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -83,10 +83,10 @@ export default function CreateShiftPage() {
     setWeekdays(preset.weekdays ?? [0, 1, 2, 3, 4]);
     if (preset.start_time) setStartTime(preset.start_time);
     if (preset.end_time) setEndTime(preset.end_time);
-    setRequiredEmployees(preset.required_employees ?? 3);
+    setRequiredEmployees(String(preset.required_employees ?? 3));
     if (preset.preset) setRotationPreset(preset.preset);
-    if (preset.work_days) setWorkDays(preset.work_days);
-    if (preset.rest_days) setRestDays(preset.rest_days);
+    if (preset.work_days) setWorkDays(String(preset.work_days));
+    if (preset.rest_days) setRestDays(String(preset.rest_days));
   };
 
   const toggleWeekday = (day: number) => {
@@ -110,8 +110,9 @@ export default function CreateShiftPage() {
   };
 
   const handleCreateSingle = async () => {
-    if (!restaurant || !date) {
-      push({ type: 'error', title: 'Заповніть дату та час' });
+    const peopleNeeded = positiveCount(requiredEmployees);
+    if (!restaurant || !date || peopleNeeded == null) {
+      push({ type: 'error', title: 'Заповніть дату, час і кількість людей' });
       return;
     }
     setSubmitting(true);
@@ -122,7 +123,7 @@ export default function CreateShiftPage() {
         restaurant_id: restaurant.id,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
-        required_employees: requiredEmployees,
+        required_employees: peopleNeeded,
         shift_type: shiftType || undefined,
         ...paymentPayload(),
       });
@@ -136,8 +137,11 @@ export default function CreateShiftPage() {
   };
 
   const handleGenerate = async () => {
-    if (!restaurant || !dateFrom || !dateTo) {
-      push({ type: 'error', title: 'Заповніть період та час' });
+    const peopleNeeded = positiveCount(requiredEmployees);
+    const work = positiveCount(workDays);
+    const rest = positiveCount(restDays);
+    if (!restaurant || !dateFrom || !dateTo || peopleNeeded == null) {
+      push({ type: 'error', title: 'Заповніть період, час і кількість людей' });
       return;
     }
 
@@ -157,22 +161,22 @@ export default function CreateShiftPage() {
         date_to: dateTo,
         start_time: startTime,
         end_time: endTime,
-        required_employees: requiredEmployees,
+        required_employees: peopleNeeded,
         shift_type: shiftType || undefined,
         ...paymentPayload(),
         weekdays: mode === 'weekly' ? weekdays : undefined,
         preset: mode === 'rotation' ? rotationPreset : undefined,
         work_days:
           mode === 'rotation' && rotationPreset === 'custom'
-            ? workDays
+            ? work ?? undefined
             : mode === 'custom_cycle'
-              ? workDays
+              ? work ?? undefined
               : undefined,
         rest_days:
           mode === 'rotation' && rotationPreset === 'custom'
-            ? restDays
+            ? rest ?? undefined
             : mode === 'custom_cycle'
-              ? restDays
+              ? rest ?? undefined
               : undefined,
       });
 
@@ -298,10 +302,10 @@ export default function CreateShiftPage() {
             (templateKind === 'rotation' && rotationPreset === 'custom')) && (
             <div className="grid grid-cols-2 gap-3">
               <Field label="Працюю (днів)">
-                <input type="number" min={1} className="field-input" value={workDays} onChange={(e) => setWorkDays(Number(e.target.value))} />
+                <input inputMode="numeric" className="field-input" value={workDays} onChange={(e) => setWorkDays(countDraft(e.target.value))} />
               </Field>
               <Field label="Відпочиваю (днів)">
-                <input type="number" min={1} className="field-input" value={restDays} onChange={(e) => setRestDays(Number(e.target.value))} />
+                <input inputMode="numeric" className="field-input" value={restDays} onChange={(e) => setRestDays(countDraft(e.target.value))} />
               </Field>
             </div>
           )}
@@ -335,10 +339,10 @@ function SharedFields({
   onStartTime, onEndTime, onRequired, onShiftType, onPaymentType,
   onShiftRate, onHourlyRate, onFixedRate,
 }: {
-  startTime: string; endTime: string; requiredEmployees: number; shiftType: string;
+  startTime: string; endTime: string; requiredEmployees: string; shiftType: string;
   paymentType: PaymentType; shiftRate: string; hourlyRate: string; fixedRate: string;
   onStartTime: (v: string) => void; onEndTime: (v: string) => void;
-  onRequired: (v: number) => void; onShiftType: (v: string) => void;
+  onRequired: (v: string) => void; onShiftType: (v: string) => void;
   onPaymentType: (v: PaymentType) => void;
   onShiftRate: (v: string) => void; onHourlyRate: (v: string) => void;
   onFixedRate: (v: string) => void;
@@ -354,7 +358,13 @@ function SharedFields({
         </Field>
       </div>
       <Field label="Потрібно людей">
-        <input type="number" min={1} className="field-input" value={requiredEmployees} onChange={(e) => onRequired(Number(e.target.value))} />
+        <input
+          inputMode="numeric"
+          className="field-input"
+          placeholder="1"
+          value={requiredEmployees}
+          onChange={(e) => onRequired(countDraft(e.target.value))}
+        />
       </Field>
       <Field label="Тип зміни (необовʼязково)">
         <input className="field-input" placeholder="Денна, нічна..." value={shiftType} onChange={(e) => onShiftType(e.target.value)} />
@@ -399,6 +409,15 @@ function ModeButton({ active, onClick, children }: { active: boolean; onClick: (
       {children}
     </button>
   );
+}
+
+function countDraft(raw: string) {
+  return raw.replace(/\D/g, '').replace(/^0+/, '').slice(0, 2);
+}
+
+function positiveCount(raw: string) {
+  if (!/^[1-9]\d?$/.test(raw)) return null;
+  return Number(raw);
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
